@@ -5,23 +5,23 @@ import aiosqlite
 from .db import get_db_path
 
 
-async def _conn() -> aiosqlite.Connection:
-    db = await aiosqlite.connect(get_db_path())
-    db.row_factory = aiosqlite.Row
-    return db
+def _conn() -> aiosqlite.Connection:
+    return aiosqlite.connect(get_db_path())
 
 
 # ============ USERS ============
 
 async def get_user(user_id: int) -> Optional[dict[str, Any]]:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
 
 
 async def create_or_update_user(user_id: int, username: Optional[str]) -> None:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         await db.execute(
             """
             INSERT INTO users (user_id, username) VALUES (?, ?)
@@ -44,7 +44,8 @@ async def save_profile(
     bio: str,
     photo_id: str,
 ) -> None:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         await db.execute(
             """
             UPDATE users SET
@@ -61,13 +62,15 @@ async def update_field(user_id: int, field: str, value: Any) -> None:
     allowed = {"name", "age", "city", "bio", "photo_id", "looking_for", "is_active"}
     if field not in allowed:
         raise ValueError(f"Field '{field}' o'zgartirib bo'lmaydi")
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         await db.execute(f"UPDATE users SET {field} = ? WHERE user_id = ?", (value, user_id))
         await db.commit()
 
 
 async def set_banned(user_id: int, banned: bool) -> None:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         await db.execute(
             "UPDATE users SET is_banned = ?, is_active = ? WHERE user_id = ?",
             (1 if banned else 0, 0 if banned else 1, user_id),
@@ -76,7 +79,8 @@ async def set_banned(user_id: int, banned: bool) -> None:
 
 
 async def is_banned(user_id: int) -> bool:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute("SELECT is_banned FROM users WHERE user_id = ?", (user_id,)) as cur:
             row = await cur.fetchone()
             return bool(row and row[0])
@@ -113,7 +117,8 @@ async def get_next_candidate(user_id: int) -> Optional[dict[str, Any]]:
         ORDER BY RANDOM()
         LIMIT 1
     """
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute(sql, params) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
@@ -123,7 +128,8 @@ async def get_next_candidate(user_id: int) -> Optional[dict[str, Any]]:
 
 async def add_like(from_user: int, to_user: int, is_like: bool) -> bool:
     """Return True if this creates a mutual match."""
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         await db.execute(
             """
             INSERT INTO likes (from_user_id, to_user_id, is_like) VALUES (?, ?, ?)
@@ -154,7 +160,8 @@ async def add_like(from_user: int, to_user: int, is_like: bool) -> bool:
 
 
 async def get_matches(user_id: int) -> list[dict[str, Any]]:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute(
             """
             SELECT u.user_id, u.name, u.age, u.city, u.photo_id, u.username, m.id as match_id
@@ -175,7 +182,8 @@ async def get_matches(user_id: int) -> list[dict[str, Any]]:
 
 async def get_pending_likes(user_id: int) -> list[dict[str, Any]]:
     """Foydalanuvchini like bosgan, lekin u javob bermagan anketalar (premium funksiya uchun)."""
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute(
             """
             SELECT u.user_id, u.name, u.age, u.city, u.photo_id, u.bio
@@ -201,7 +209,8 @@ async def get_pending_likes(user_id: int) -> list[dict[str, Any]]:
 # ============ ANONYMOUS CHAT ============
 
 async def start_chat(user_id: int, partner_id: int, match_id: int) -> None:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         await db.execute("DELETE FROM active_chats WHERE user_id IN (?, ?)", (user_id, partner_id))
         await db.execute(
             "INSERT INTO active_chats (user_id, partner_id, match_id) VALUES (?, ?, ?), (?, ?, ?)",
@@ -211,7 +220,8 @@ async def start_chat(user_id: int, partner_id: int, match_id: int) -> None:
 
 
 async def stop_chat(user_id: int) -> Optional[int]:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT partner_id FROM active_chats WHERE user_id = ?", (user_id,)
         ) as cur:
@@ -227,7 +237,8 @@ async def stop_chat(user_id: int) -> Optional[int]:
 
 
 async def get_chat_partner(user_id: int) -> Optional[int]:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT partner_id FROM active_chats WHERE user_id = ?", (user_id,)
         ) as cur:
@@ -238,7 +249,8 @@ async def get_chat_partner(user_id: int) -> Optional[int]:
 # ============ REPORTS ============
 
 async def add_report(from_user: int, to_user: int, reason: str) -> int:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         cur = await db.execute(
             "INSERT INTO reports (from_user_id, to_user_id, reason) VALUES (?, ?, ?)",
             (from_user, to_user, reason),
@@ -248,7 +260,8 @@ async def add_report(from_user: int, to_user: int, reason: str) -> int:
 
 
 async def reports_count(user_id: int) -> int:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT COUNT(*) FROM reports WHERE to_user_id = ?", (user_id,)
         ) as cur:
@@ -259,7 +272,8 @@ async def reports_count(user_id: int) -> int:
 # ============ ADMIN / STATS ============
 
 async def stats() -> dict[str, int]:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         result: dict[str, int] = {}
         queries = {
             "total_users": "SELECT COUNT(*) FROM users",
@@ -278,7 +292,8 @@ async def stats() -> dict[str, int]:
 
 
 async def all_active_user_ids() -> list[int]:
-    async with await _conn() as db:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT user_id FROM users WHERE is_banned = 0"
         ) as cur:
