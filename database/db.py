@@ -1,3 +1,5 @@
+import os
+
 import aiosqlite
 
 _DB_PATH: str = "tanishuv.db"
@@ -10,6 +12,10 @@ def get_db_path() -> str:
 async def init_db(path: str) -> None:
     global _DB_PATH
     _DB_PATH = path
+
+    parent = os.path.dirname(os.path.abspath(_DB_PATH))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
 
     async with aiosqlite.connect(_DB_PATH) as db:
         await db.executescript(
