@@ -1,10 +1,11 @@
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
+from data.regions import get_district, get_region
 from database import models
-from keyboards import reply
+from keyboards import inline, reply
 from states.user_states import Registration
 from utils.helpers import format_profile, parse_age
 
@@ -75,20 +76,55 @@ async def reg_looking_for(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(looking_for=lf)
     await message.answer(
-        "🏙 Qaysi shaharda yashaysiz? (masalan: Toshkent)",
-        reply_markup=reply.cancel_kb(),
+        "🏙 <b>Viloyatingizni tanlang:</b>",
+        reply_markup=inline.regions_kb("reg"),
     )
     await state.set_state(Registration.city)
 
 
-@router.message(Registration.city, F.text)
-async def reg_city(message: Message, state: FSMContext) -> None:
-    city = (message.text or "").strip()
-    if len(city) < 2 or len(city) > 40:
-        await message.answer("❗️ Shahar nomi 2 dan 40 belgigacha bo'lsin:")
+@router.callback_query(Registration.city, F.data.startswith("reg:r:"))
+async def reg_region(call: CallbackQuery, state: FSMContext) -> None:
+    if call.data is None or call.message is None:
         return
+    idx = int(call.data.split(":")[2])
+    region = get_region(idx)
+    if not region:
+        await call.answer("Viloyat topilmadi.", show_alert=True)
+        return
+    await call.answer()
+    await call.message.edit_text(  # type: ignore[union-attr]
+        f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
+        reply_markup=inline.districts_kb("reg", idx),
+    )
+
+
+@router.callback_query(Registration.city, F.data == "reg:back")
+async def reg_back_regions(call: CallbackQuery) -> None:
+    if call.message is None:
+        return
+    await call.answer()
+    await call.message.edit_text(  # type: ignore[union-attr]
+        "🏙 <b>Viloyatingizni tanlang:</b>",
+        reply_markup=inline.regions_kb("reg"),
+    )
+
+
+@router.callback_query(Registration.city, F.data.startswith("reg:c:"))
+async def reg_city_pick(call: CallbackQuery, state: FSMContext) -> None:
+    if call.data is None or call.message is None:
+        return
+    parts = call.data.split(":")
+    region_idx, district_idx = int(parts[2]), int(parts[3])
+    region = get_region(region_idx)
+    district = get_district(region_idx, district_idx)
+    if not region or not district:
+        await call.answer("Topilmadi.", show_alert=True)
+        return
+    city = f"{region['name']}, {district}"
     await state.update_data(city=city)
-    await message.answer(
+    await call.answer(f"✓ {district}")
+    await call.message.edit_text(f"📍 Tanlandi: <b>{city}</b>")  # type: ignore[union-attr]
+    await call.message.answer(  # type: ignore[union-attr]
         "💬 O'zingiz haqingizda qisqacha yozing (yoki o'tkazib yuboring):",
         reply_markup=reply.skip_kb(),
     )

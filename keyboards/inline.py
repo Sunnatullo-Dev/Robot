@@ -1,5 +1,37 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from data.regions import REGIONS
+
+
+def regions_kb(prefix: str) -> InlineKeyboardMarkup:
+    """Barcha viloyatlarni 2 ustunda ko'rsatadi. prefix: 'reg' yoki 'edit'."""
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for i, r in enumerate(REGIONS):
+        row.append(InlineKeyboardButton(text=r["name"], callback_data=f"{prefix}:r:{i}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def districts_kb(prefix: str, region_idx: int) -> InlineKeyboardMarkup:
+    """Tanlangan viloyatdagi tuman/shaharlar + 'Orqaga' tugmasi."""
+    region = REGIONS[region_idx]
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for i, d in enumerate(region["districts"]):
+        row.append(InlineKeyboardButton(text=d, callback_data=f"{prefix}:c:{region_idx}:{i}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="« Viloyatlarga qaytish", callback_data=f"{prefix}:back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
 
 def edit_profile_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(

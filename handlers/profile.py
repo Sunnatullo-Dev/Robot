@@ -3,6 +3,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from data.regions import get_district, get_region
 from database import models
 from keyboards import inline, reply
 from states.user_states import EditProfile
@@ -62,10 +63,17 @@ async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
         )
         return
 
+    if field == "city":
+        await call.message.answer(  # type: ignore[union-attr]
+            "🏙 <b>Viloyatingizni tanlang:</b>",
+            reply_markup=inline.regions_kb("edit"),
+        )
+        await state.set_state(EditProfile.city)
+        return
+
     prompts = {
         "name": ("📝 Yangi ism:", EditProfile.name, reply.cancel_kb()),
         "age": ("🎂 Yangi yosh (14-99):", EditProfile.age, reply.cancel_kb()),
-        "city": ("🏙 Yangi shahar:", EditProfile.city, reply.cancel_kb()),
         "bio": ("💬 Yangi bio:", EditProfile.bio, reply.skip_kb("🗑 Bo'sh qoldirish")),
         "photo": ("📷 Yangi rasm yuboring:", EditProfile.photo, reply.cancel_kb()),
         "looking_for": ("💕 Kimni qidirasiz?", EditProfile.looking_for, reply.looking_for_kb()),
@@ -75,6 +83,52 @@ async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
     text, st, kb = prompts[field]
     await call.message.answer(text, reply_markup=kb)  # type: ignore[union-attr]
     await state.set_state(st)
+
+
+@router.callback_query(EditProfile.city, F.data.startswith("edit:r:"))
+async def edit_region(call: CallbackQuery) -> None:
+    if call.data is None or call.message is None:
+        return
+    idx = int(call.data.split(":")[2])
+    region = get_region(idx)
+    if not region:
+        await call.answer("Viloyat topilmadi.", show_alert=True)
+        return
+    await call.answer()
+    await call.message.edit_text(  # type: ignore[union-attr]
+        f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
+        reply_markup=inline.districts_kb("edit", idx),
+    )
+
+
+@router.callback_query(EditProfile.city, F.data == "edit:back")
+async def edit_back_regions(call: CallbackQuery) -> None:
+    if call.message is None:
+        return
+    await call.answer()
+    await call.message.edit_text(  # type: ignore[union-attr]
+        "🏙 <b>Viloyatingizni tanlang:</b>",
+        reply_markup=inline.regions_kb("edit"),
+    )
+
+
+@router.callback_query(EditProfile.city, F.data.startswith("edit:c:"))
+async def edit_city_pick(call: CallbackQuery, state: FSMContext) -> None:
+    if call.data is None or call.from_user is None or call.message is None:
+        return
+    parts = call.data.split(":")
+    region_idx, district_idx = int(parts[2]), int(parts[3])
+    region = get_region(region_idx)
+    district = get_district(region_idx, district_idx)
+    if not region or not district:
+        await call.answer("Topilmadi.", show_alert=True)
+        return
+    city = f"{region['name']}, {district}"
+    await models.update_field(call.from_user.id, "city", city)
+    await state.clear()
+    await call.answer(f"✓ {district}")
+    await call.message.edit_text(f"✅ Shahar yangilandi: <b>{city}</b>")  # type: ignore[union-attr]
+    await call.message.answer("Asosiy menyu", reply_markup=reply.main_menu())  # type: ignore[union-attr]
 
 
 @router.message(EditProfile.name, F.text)
@@ -101,19 +155,6 @@ async def edit_age(message: Message, state: FSMContext) -> None:
     await models.update_field(message.from_user.id, "age", age)
     await state.clear()
     await message.answer("✅ Yosh yangilandi.", reply_markup=reply.main_menu())
-
-
-@router.message(EditProfile.city, F.text)
-async def edit_city(message: Message, state: FSMContext) -> None:
-    if message.from_user is None:
-        return
-    city = (message.text or "").strip()
-    if len(city) < 2 or len(city) > 40:
-        await message.answer("❗️ Shahar nomi 2 dan 40 belgigacha bo'lsin.")
-        return
-    await models.update_field(message.from_user.id, "city", city)
-    await state.clear()
-    await message.answer("✅ Shahar yangilandi.", reply_markup=reply.main_menu())
 
 
 @router.message(EditProfile.bio, F.text)
