@@ -1,0 +1,165 @@
+from aiogram import F, Router
+from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
+
+from database import models
+from keyboards import reply
+from states.user_states import Registration
+from utils.helpers import format_profile, parse_age
+
+router = Router(name="registration")
+
+
+@router.message(StateFilter(Registration), F.text == "❌ Bekor qilish")
+async def reg_cancel(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(
+        "Bekor qilindi. Anketani qayta yaratish uchun /start bosing.",
+        reply_markup=reply.main_menu(),
+    )
+
+
+@router.message(Registration.name, F.text)
+async def reg_name(message: Message, state: FSMContext) -> None:
+    name = (message.text or "").strip()
+    if len(name) < 2 or len(name) > 30:
+        await message.answer("❗️ Ism 2 dan 30 belgigacha bo'lsin. Qayta kiriting:")
+        return
+    await state.update_data(name=name)
+    await message.answer("🎂 Yoshingizni kiriting (14-99):")
+    await state.set_state(Registration.age)
+
+
+@router.message(Registration.age, F.text)
+async def reg_age(message: Message, state: FSMContext) -> None:
+    text = message.text or ""
+    age = parse_age(text)
+    if age is None:
+        await message.answer("❗️ Iltimos, 14 dan 99 gacha bo'lgan son kiriting:")
+        return
+    await state.update_data(age=age)
+    await message.answer("⚧ Jinsingizni tanlang:", reply_markup=reply.gender_kb())
+    await state.set_state(Registration.gender)
+
+
+@router.message(Registration.gender, F.text)
+async def reg_gender(message: Message, state: FSMContext) -> None:
+    text = message.text or ""
+    if "Erkak" in text:
+        gender = "M"
+    elif "Ayol" in text:
+        gender = "F"
+    else:
+        await message.answer("❗️ Tugmalardan birini tanlang.")
+        return
+    await state.update_data(gender=gender)
+    await message.answer(
+        "💕 Kimni qidirayapsiz?",
+        reply_markup=reply.looking_for_kb(),
+    )
+    await state.set_state(Registration.looking_for)
+
+
+@router.message(Registration.looking_for, F.text)
+async def reg_looking_for(message: Message, state: FSMContext) -> None:
+    text = message.text or ""
+    if "Erkak" in text:
+        lf = "M"
+    elif "Ayol" in text:
+        lf = "F"
+    elif "Farqi" in text:
+        lf = "A"
+    else:
+        await message.answer("❗️ Tugmalardan birini tanlang.")
+        return
+    await state.update_data(looking_for=lf)
+    await message.answer(
+        "🏙 Qaysi shaharda yashaysiz? (masalan: Toshkent)",
+        reply_markup=reply.cancel_kb(),
+    )
+    await state.set_state(Registration.city)
+
+
+@router.message(Registration.city, F.text)
+async def reg_city(message: Message, state: FSMContext) -> None:
+    city = (message.text or "").strip()
+    if len(city) < 2 or len(city) > 40:
+        await message.answer("❗️ Shahar nomi 2 dan 40 belgigacha bo'lsin:")
+        return
+    await state.update_data(city=city)
+    await message.answer(
+        "💬 O'zingiz haqingizda qisqacha yozing (yoki o'tkazib yuboring):",
+        reply_markup=reply.skip_kb(),
+    )
+    await state.set_state(Registration.bio)
+
+
+@router.message(Registration.bio, F.text)
+async def reg_bio(message: Message, state: FSMContext) -> None:
+    text = (message.text or "").strip()
+    bio = "" if text == "⏭ O'tkazib yuborish" else text[:300]
+    await state.update_data(bio=bio)
+    await message.answer(
+        "📷 Endi o'z rasmingizni yuboring (1 dona):",
+        reply_markup=reply.cancel_kb(),
+    )
+    await state.set_state(Registration.photo)
+
+
+@router.message(Registration.photo, F.photo)
+async def reg_photo(message: Message, state: FSMContext) -> None:
+    if not message.photo:
+        return
+    photo_id = message.photo[-1].file_id
+    await state.update_data(photo_id=photo_id)
+    data = await state.get_data()
+
+    preview = {
+        "name": data.get("name"),
+        "age": data.get("age"),
+        "gender": data.get("gender"),
+        "city": data.get("city"),
+        "bio": data.get("bio"),
+    }
+    await message.answer_photo(
+        photo=photo_id,
+        caption=f"<b>Anketangizni tasdiqlaysizmi?</b>\n\n{format_profile(preview)}",
+        reply_markup=reply.confirm_kb(),
+    )
+    await state.set_state(Registration.confirm)
+
+
+@router.message(Registration.photo)
+async def reg_photo_invalid(message: Message) -> None:
+    await message.answer("❗️ Iltimos, rasm yuboring (fayl/dokument emas).")
+
+
+@router.message(Registration.confirm, F.text == "✅ Ha, to'g'ri")
+async def reg_confirm(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+    data = await state.get_data()
+    await models.save_profile(
+        user_id=message.from_user.id,
+        name=data["name"],
+        age=data["age"],
+        gender=data["gender"],
+        looking_for=data["looking_for"],
+        city=data["city"],
+        bio=data.get("bio", ""),
+        photo_id=data["photo_id"],
+    )
+    await state.clear()
+    await message.answer(
+        "🎉 Tabriklaymiz! Anketangiz tayyor.\n\n"
+        "Endi <b>🔍 Anketalarni ko'rish</b> tugmasini bosib, yangi do'stlar topishingiz mumkin.",
+        reply_markup=reply.main_menu(),
+    )
+
+
+@router.message(Registration.confirm, F.text == "🔄 Qayta to'ldirish")
+async def reg_restart(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("📝 Yangidan boshladik. Ismingizni kiriting:", reply_markup=reply.cancel_kb())
+    await state.set_state(Registration.name)

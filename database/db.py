@@ -1,0 +1,76 @@
+import aiosqlite
+
+_DB_PATH: str = "tanishuv.db"
+
+
+def get_db_path() -> str:
+    return _DB_PATH
+
+
+async def init_db(path: str) -> None:
+    global _DB_PATH
+    _DB_PATH = path
+
+    async with aiosqlite.connect(_DB_PATH) as db:
+        await db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id      INTEGER PRIMARY KEY,
+                username     TEXT,
+                name         TEXT,
+                age          INTEGER,
+                gender       TEXT CHECK(gender IN ('M','F')),
+                looking_for  TEXT CHECK(looking_for IN ('M','F','A')),
+                city         TEXT,
+                bio          TEXT,
+                photo_id     TEXT,
+                is_active    INTEGER DEFAULT 1,
+                is_banned    INTEGER DEFAULT 0,
+                is_premium   INTEGER DEFAULT 0,
+                language     TEXT DEFAULT 'uz',
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS likes (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_user_id INTEGER NOT NULL,
+                to_user_id   INTEGER NOT NULL,
+                is_like      INTEGER NOT NULL,
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(from_user_id, to_user_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_likes_from ON likes(from_user_id);
+            CREATE INDEX IF NOT EXISTS idx_likes_to ON likes(to_user_id);
+
+            CREATE TABLE IF NOT EXISTS matches (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user1_id   INTEGER NOT NULL,
+                user2_id   INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active  INTEGER DEFAULT 1,
+                UNIQUE(user1_id, user2_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_matches_users
+                ON matches(user1_id, user2_id);
+
+            CREATE TABLE IF NOT EXISTS reports (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_user_id INTEGER NOT NULL,
+                to_user_id   INTEGER NOT NULL,
+                reason       TEXT,
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS active_chats (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL UNIQUE,
+                partner_id INTEGER NOT NULL,
+                match_id   INTEGER NOT NULL,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        await db.commit()
