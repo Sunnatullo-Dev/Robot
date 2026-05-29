@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from config import Config
+from data.test_users import BASE_ID, TEST_USERS
 from database import models
 from keyboards import inline, reply
 from states.user_states import AdminFlow
@@ -171,4 +172,91 @@ async def cmd_stats(message: Message, config: Config) -> None:
     await message.answer(
         f"👥 {s['total_users']} • 🟢 {s['active_users']} • "
         f"💞 {s['total_matches']} • ⚠️ {s['total_reports']}"
+    )
+
+
+# ============ TEST ANKETALAR (/seed, /unseed) ============
+
+@router.message(Command("seed"))
+async def cmd_seed_start(
+    message: Message, state: FSMContext, config: Config,
+) -> None:
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    await state.set_state(AdminFlow.seed_photo)
+    await message.answer(
+        f"📸 <b>Test anketalar yaratish</b>\n\n"
+        f"Hozir <b>bitta rasm</b> yuboring — u {len(TEST_USERS)} ta test "
+        f"anketada ishlatiladi (har xil ism/yosh/shahar bilan).\n\n"
+        f"Bekor qilish uchun: /cancel",
+        reply_markup=reply.cancel_kb(),
+    )
+
+
+@router.message(Command("cancel"), AdminFlow.seed_photo)
+async def cmd_seed_cancel(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Bekor qilindi.", reply_markup=reply.main_menu())
+
+
+@router.message(AdminFlow.seed_photo, F.text == "❌ Bekor qilish")
+async def seed_cancel_btn(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Bekor qilindi.", reply_markup=reply.main_menu())
+
+
+@router.message(AdminFlow.seed_photo, F.photo)
+async def seed_with_photo(
+    message: Message, state: FSMContext, config: Config,
+) -> None:
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    if not message.photo:
+        return
+
+    photo_id = message.photo[-1].file_id
+    created = 0
+    failed: list[str] = []
+
+    for i, (gender, name, age, lf, city, bio, lat, lng) in enumerate(TEST_USERS):
+        user_id = BASE_ID + i + 1
+        try:
+            await models.upsert_seed_user(
+                user_id=user_id,
+                name=name,
+                age=age,
+                gender=gender,
+                looking_for=lf,
+                city=city,
+                bio=bio,
+                photo_id=photo_id,
+                latitude=lat,
+                longitude=lng,
+            )
+            created += 1
+        except Exception as e:
+            logger.exception("Seed user %s failed: %s", name, e)
+            failed.append(f"{name}: {e}")
+
+    await state.clear()
+    text = f"✅ <b>{created} ta test anketa yaratildi</b>\n\n"
+    if failed:
+        text += f"❗️ Muvaffaqiyatsiz: {len(failed)}\n" + "\n".join(failed[:5])
+    text += "\n\nO'chirib tashlash uchun: /unseed"
+    await message.answer(text, reply_markup=reply.main_menu())
+
+
+@router.message(AdminFlow.seed_photo)
+async def seed_no_photo(message: Message) -> None:
+    await message.answer("❗️ Iltimos, rasm yuboring (matn yoki fayl emas).")
+
+
+@router.message(Command("unseed"))
+async def cmd_unseed(message: Message, config: Config) -> None:
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    deleted = await models.delete_seed_users(BASE_ID)
+    await message.answer(
+        f"🗑 {deleted} ta test anketa o'chirildi.",
+        reply_markup=reply.main_menu(),
     )

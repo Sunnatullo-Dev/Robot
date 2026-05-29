@@ -32,3 +32,4 @@ class AdminFlow(StatesGroup):
     broadcast = State()
     ban_user = State()
     unban_user = State()
+    seed_photo = State()

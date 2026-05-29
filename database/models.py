@@ -62,6 +62,63 @@ async def save_profile(
         await db.commit()
 
 
+async def upsert_seed_user(
+    user_id: int,
+    name: str,
+    age: int,
+    gender: str,
+    looking_for: str,
+    city: str,
+    bio: str,
+    photo_id: str,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+) -> None:
+    """Test foydalanuvchi yaratish yoki yangilash (/seed buyrug'i uchun)."""
+    async with _conn() as db:
+        await db.execute(
+            """
+            INSERT INTO users (
+                user_id, username, name, age, gender, looking_for,
+                city, bio, photo_id, latitude, longitude, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+                name = excluded.name,
+                age = excluded.age,
+                gender = excluded.gender,
+                looking_for = excluded.looking_for,
+                city = excluded.city,
+                bio = excluded.bio,
+                photo_id = excluded.photo_id,
+                latitude = excluded.latitude,
+                longitude = excluded.longitude,
+                is_active = 1
+            """,
+            (user_id, f"test_{user_id}", name, age, gender, looking_for,
+             city, bio, photo_id, latitude, longitude),
+        )
+        await db.commit()
+
+
+async def delete_seed_users(base_id: int) -> int:
+    """base_id dan boshlanadigan barcha test foydalanuvchilarni o'chiradi."""
+    async with _conn() as db:
+        cur = await db.execute(
+            "DELETE FROM users WHERE user_id >= ?", (base_id,)
+        )
+        # Bog'liq ma'lumotlarni ham tozalash
+        await db.execute(
+            "DELETE FROM likes WHERE from_user_id >= ? OR to_user_id >= ?",
+            (base_id, base_id),
+        )
+        await db.execute(
+            "DELETE FROM matches WHERE user1_id >= ? OR user2_id >= ?",
+            (base_id, base_id),
+        )
+        await db.commit()
+        return cur.rowcount or 0
+
+
 async def update_location(user_id: int, lat: Optional[float], lon: Optional[float]) -> None:
     async with _conn() as db:
         await db.execute(
