@@ -27,9 +27,10 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
         return
 
     await state.update_data(current_candidate=candidate["user_id"])
+    distance = candidate.pop("_distance", None)
     await message.answer_photo(
         photo=candidate["photo_id"],
-        caption=format_profile(candidate),
+        caption=format_profile(candidate, distance_km=distance),
         reply_markup=reply.search_kb(),
     )
 

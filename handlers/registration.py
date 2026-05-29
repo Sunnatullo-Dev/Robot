@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -10,6 +12,7 @@ from states.user_states import Registration
 from utils.helpers import format_profile, parse_age
 
 router = Router(name="registration")
+logger = logging.getLogger(__name__)
 
 
 @router.message(StateFilter(Registration), F.text == "❌ Bekor qilish")
@@ -84,7 +87,9 @@ async def reg_looking_for(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(Registration.city, F.data.startswith("reg:r:"))
 async def reg_region(call: CallbackQuery, state: FSMContext) -> None:
+    logger.info("DEBUG reg_region: data=%s msg=%s", call.data, type(call.message).__name__ if call.message else None)
     if call.data is None or call.message is None:
+        logger.warning("DEBUG reg_region: early return (data/msg None)")
         return
     idx = int(call.data.split(":")[2])
     region = get_region(idx)
@@ -92,10 +97,19 @@ async def reg_region(call: CallbackQuery, state: FSMContext) -> None:
         await call.answer("Viloyat topilmadi.", show_alert=True)
         return
     await call.answer()
-    await call.message.edit_text(  # type: ignore[union-attr]
-        f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
-        reply_markup=inline.districts_kb("reg", idx),
-    )
+    try:
+        await call.message.edit_text(  # type: ignore[union-attr]
+            f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
+            reply_markup=inline.districts_kb("reg", idx),
+        )
+        logger.info("DEBUG reg_region: edit_text OK for %s", region["name"])
+    except Exception as e:
+        logger.exception("DEBUG reg_region: edit_text FAILED: %s", e)
+        # Fallback: send new message
+        await call.message.answer(  # type: ignore[union-attr]
+            f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
+            reply_markup=inline.districts_kb("reg", idx),
+        )
 
 
 @router.callback_query(Registration.city, F.data == "reg:back")
@@ -123,8 +137,37 @@ async def reg_city_pick(call: CallbackQuery, state: FSMContext) -> None:
     city = f"{region['name']}, {district}"
     await state.update_data(city=city)
     await call.answer(f"✓ {district}")
-    await call.message.edit_text(f"📍 Tanlandi: <b>{city}</b>")  # type: ignore[union-attr]
+    await call.message.edit_text(f"🏙 Tanlandi: <b>{city}</b>")  # type: ignore[union-attr]
     await call.message.answer(  # type: ignore[union-attr]
+        "📍 <b>Lokatsiyangizni yuboring</b> (ixtiyoriy)\n\n"
+        "Bu yaqin atrofdagi odamlarni topishga yordam beradi.\n"
+        "Telefondan: tugmani bosing → ruxsat bering → joriy joylashuv yuboriladi.\n\n"
+        "Agar xohlamasangiz «O'tkazib yuborish» bosing.",
+        reply_markup=reply.location_kb(),
+    )
+    await state.set_state(Registration.location)
+
+
+@router.message(Registration.location, F.location)
+async def reg_location(message: Message, state: FSMContext) -> None:
+    if message.location is None:
+        return
+    await state.update_data(
+        latitude=message.location.latitude,
+        longitude=message.location.longitude,
+    )
+    await message.answer("✅ Lokatsiya saqlandi.", reply_markup=reply.remove)
+    await message.answer(
+        "💬 O'zingiz haqingizda qisqacha yozing (yoki o'tkazib yuboring):",
+        reply_markup=reply.skip_kb(),
+    )
+    await state.set_state(Registration.bio)
+
+
+@router.message(Registration.location, F.text == "⏭ O'tkazib yuborish")
+async def reg_skip_location(message: Message, state: FSMContext) -> None:
+    await state.update_data(latitude=None, longitude=None)
+    await message.answer(
         "💬 O'zingiz haqingizda qisqacha yozing (yoki o'tkazib yuboring):",
         reply_markup=reply.skip_kb(),
     )
@@ -185,6 +228,8 @@ async def reg_confirm(message: Message, state: FSMContext) -> None:
         city=data["city"],
         bio=data.get("bio", ""),
         photo_id=data["photo_id"],
+        latitude=data.get("latitude"),
+        longitude=data.get("longitude"),
     )
     await state.clear()
     await message.answer(

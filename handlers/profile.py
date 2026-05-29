@@ -71,6 +71,15 @@ async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(EditProfile.city)
         return
 
+    if field == "location":
+        await call.message.answer(  # type: ignore[union-attr]
+            "📍 <b>Yangi lokatsiya yuboring</b>\n\n"
+            "Tugmani bosib, ruxsat bering. Yoki «O'tkazib yuborish» bilan lokatsiyani o'chirish.",
+            reply_markup=reply.location_kb(),
+        )
+        await state.set_state(EditProfile.location)
+        return
+
     prompts = {
         "name": ("📝 Yangi ism:", EditProfile.name, reply.cancel_kb()),
         "age": ("🎂 Yangi yosh (14-99):", EditProfile.age, reply.cancel_kb()),
@@ -175,6 +184,28 @@ async def edit_photo(message: Message, state: FSMContext) -> None:
     await models.update_field(message.from_user.id, "photo_id", message.photo[-1].file_id)
     await state.clear()
     await message.answer("✅ Rasm yangilandi.", reply_markup=reply.main_menu())
+
+
+@router.message(EditProfile.location, F.location)
+async def edit_location(message: Message, state: FSMContext) -> None:
+    if message.from_user is None or message.location is None:
+        return
+    await models.update_location(
+        message.from_user.id,
+        message.location.latitude,
+        message.location.longitude,
+    )
+    await state.clear()
+    await message.answer("✅ Lokatsiya yangilandi.", reply_markup=reply.main_menu())
+
+
+@router.message(EditProfile.location, F.text == "⏭ O'tkazib yuborish")
+async def edit_location_clear(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+    await models.update_location(message.from_user.id, None, None)
+    await state.clear()
+    await message.answer("✅ Lokatsiya o'chirildi.", reply_markup=reply.main_menu())
 
 
 @router.message(EditProfile.looking_for, F.text)

@@ -43,6 +43,8 @@ async def save_profile(
     city: str,
     bio: str,
     photo_id: str,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
 ) -> None:
     async with _conn() as db:
         db.row_factory = aiosqlite.Row
@@ -50,10 +52,21 @@ async def save_profile(
             """
             UPDATE users SET
                 name = ?, age = ?, gender = ?, looking_for = ?,
-                city = ?, bio = ?, photo_id = ?, is_active = 1
+                city = ?, bio = ?, photo_id = ?,
+                latitude = ?, longitude = ?, is_active = 1
             WHERE user_id = ?
             """,
-            (name, age, gender, looking_for, city, bio, photo_id, user_id),
+            (name, age, gender, looking_for, city, bio, photo_id,
+             latitude, longitude, user_id),
+        )
+        await db.commit()
+
+
+async def update_location(user_id: int, lat: Optional[float], lon: Optional[float]) -> None:
+    async with _conn() as db:
+        await db.execute(
+            "UPDATE users SET latitude = ?, longitude = ? WHERE user_id = ?",
+            (lat, lon, user_id),
         )
         await db.commit()
 
@@ -89,6 +102,12 @@ async def is_banned(user_id: int) -> bool:
 # ============ SEARCH / FEED ============
 
 async def get_next_candidate(user_id: int) -> Optional[dict[str, Any]]:
+    """Mos keladigan anketani qaytaradi. Agar foydalanuvchining lokatsiyasi
+    bo'lsa, eng yaqindagi (lekin shu paytgacha ko'rilmagan) odamni qaytaradi.
+    Aks holda tasodifiy.
+    """
+    from utils.helpers import haversine_km
+
     user = await get_user(user_id)
     if not user or not user.get("gender") or not user.get("looking_for"):
         return None
@@ -102,6 +121,42 @@ async def get_next_candidate(user_id: int) -> Optional[dict[str, Any]]:
     looking_back = "AND (u.looking_for = ? OR u.looking_for = 'A')"
     params.append(user["gender"])
     params.append(user_id)
+
+    has_my_loc = user.get("latitude") is not None and user.get("longitude") is not None
+
+    if has_my_loc:
+        # Lokatsiyasi bor barcha kandidatlarni olamiz, Python da masofa bo'yicha saralaymiz
+        sql = f"""
+            SELECT u.* FROM users u
+            WHERE u.user_id != ?
+              AND u.is_active = 1
+              AND u.is_banned = 0
+              AND u.photo_id IS NOT NULL
+              {gender_filter}
+              {looking_back}
+              AND u.user_id NOT IN (
+                  SELECT to_user_id FROM likes WHERE from_user_id = ?
+              )
+              AND u.latitude IS NOT NULL
+              AND u.longitude IS NOT NULL
+            LIMIT 200
+        """
+        async with _conn() as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(sql, params) as cur:
+                rows = await cur.fetchall()
+
+        if rows:
+            cands = [dict(r) for r in rows]
+            for c in cands:
+                c["_distance"] = haversine_km(
+                    user["latitude"], user["longitude"],
+                    c["latitude"], c["longitude"],
+                )
+            cands.sort(key=lambda c: c["_distance"])
+            return cands[0]
+
+        # Lokatsiyali kandidat yo'q — tasodifiyga qaytamiz
 
     sql = f"""
         SELECT u.* FROM users u

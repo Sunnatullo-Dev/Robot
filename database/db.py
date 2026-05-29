@@ -30,6 +30,8 @@ async def init_db(path: str) -> None:
                 city         TEXT,
                 bio          TEXT,
                 photo_id     TEXT,
+                latitude     REAL,
+                longitude    REAL,
                 is_active    INTEGER DEFAULT 1,
                 is_banned    INTEGER DEFAULT 0,
                 is_premium   INTEGER DEFAULT 0,
@@ -79,4 +81,15 @@ async def init_db(path: str) -> None:
             );
             """
         )
+        await db.commit()
+
+        # Eski DB uchun migration: yetishmagan ustunlarni qo'shamiz
+        cursor = await db.execute("PRAGMA table_info(users)")
+        existing_cols = {row[1] for row in await cursor.fetchall()}
+        for col, sql in (
+            ("latitude", "ALTER TABLE users ADD COLUMN latitude REAL"),
+            ("longitude", "ALTER TABLE users ADD COLUMN longitude REAL"),
+        ):
+            if col not in existing_cols:
+                await db.execute(sql)
         await db.commit()
