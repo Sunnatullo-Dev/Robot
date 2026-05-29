@@ -27,6 +27,9 @@ class ReportFlow(StatesGroup):
 
 class AdminFlow(StatesGroup):
     broadcast = State()
+    broadcast_filter_region = State()
     ban_user = State()
     unban_user = State()
     seed_photo = State()
+    user_search = State()
+    setting_value = State()

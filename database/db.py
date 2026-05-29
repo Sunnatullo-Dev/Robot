@@ -79,6 +79,26 @@ async def init_db(path: str) -> None:
                 match_id   INTEGER NOT NULL,
                 started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id   INTEGER NOT NULL,
+                action     TEXT NOT NULL,
+                target_id  INTEGER,
+                details    TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_admin_logs_admin
+                ON admin_logs(admin_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_reports_to
+                ON reports(to_user_id);
             """
         )
         await db.commit()
@@ -89,7 +109,32 @@ async def init_db(path: str) -> None:
         for col, sql in (
             ("latitude", "ALTER TABLE users ADD COLUMN latitude REAL"),
             ("longitude", "ALTER TABLE users ADD COLUMN longitude REAL"),
+            ("is_shadow_banned", "ALTER TABLE users ADD COLUMN is_shadow_banned INTEGER DEFAULT 0"),
+            ("premium_until", "ALTER TABLE users ADD COLUMN premium_until TIMESTAMP"),
         ):
             if col not in existing_cols:
                 await db.execute(sql)
+        await db.commit()
+
+        # reports jadvalida status ustuni
+        cursor = await db.execute("PRAGMA table_info(reports)")
+        report_cols = {row[1] for row in await cursor.fetchall()}
+        if "status" not in report_cols:
+            await db.execute("ALTER TABLE reports ADD COLUMN status TEXT DEFAULT 'pending'")
+        await db.commit()
+
+        # Default sozlamalar
+        defaults = {
+            "registration_enabled": "1",
+            "auto_ban_enabled": "1",
+            "auto_ban_threshold": "3",
+            "min_age": "14",
+            "daily_likes_limit": "0",  # 0 = cheksiz
+            "flood_limit": "0",  # 0 = default throttling
+        }
+        for k, v in defaults.items():
+            await db.execute(
+                "INSERT OR IGNORE INTO bot_settings (key, value) VALUES (?, ?)",
+                (k, v),
+            )
         await db.commit()

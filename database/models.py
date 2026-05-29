@@ -156,6 +156,275 @@ async def is_banned(user_id: int) -> bool:
             return bool(row and row[0])
 
 
+async def set_shadow_banned(user_id: int, shadow: bool) -> None:
+    """Shadowban — foydalanuvchi botda hech narsa o'zgarmagandek ko'radi,
+    lekin uning anketasi qidiruvda boshqalarga ko'rinmaydi."""
+    async with _conn() as db:
+        await db.execute(
+            "UPDATE users SET is_shadow_banned = ? WHERE user_id = ?",
+            (1 if shadow else 0, user_id),
+        )
+        await db.commit()
+
+
+async def hard_delete_user(user_id: int) -> None:
+    """Foydalanuvchini va bog'liq ma'lumotlarini butunlay o'chirib tashlash."""
+    async with _conn() as db:
+        await db.execute("DELETE FROM active_chats WHERE user_id = ? OR partner_id = ?", (user_id, user_id))
+        await db.execute("DELETE FROM likes WHERE from_user_id = ? OR to_user_id = ?", (user_id, user_id))
+        await db.execute("DELETE FROM matches WHERE user1_id = ? OR user2_id = ?", (user_id, user_id))
+        await db.execute("DELETE FROM reports WHERE from_user_id = ? OR to_user_id = ?", (user_id, user_id))
+        await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+        await db.commit()
+
+
+# ============ USER SEARCH (ADMIN) ============
+
+async def find_users(query: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Foydalanuvchini ID, username yoki ism bo'yicha qidirish."""
+    query = query.strip()
+    if not query:
+        return []
+
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        if query.isdigit():
+            async with db.execute(
+                "SELECT * FROM users WHERE user_id = ? LIMIT ?",
+                (int(query), limit),
+            ) as cur:
+                rows = await cur.fetchall()
+                return [dict(r) for r in rows]
+
+        like = f"%{query.lstrip('@')}%"
+        async with db.execute(
+            """
+            SELECT * FROM users
+            WHERE username LIKE ? OR name LIKE ?
+            ORDER BY last_seen DESC
+            LIMIT ?
+            """,
+            (like, like, limit),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+# ============ BOT SETTINGS ============
+
+async def get_setting(key: str, default: str = "") -> str:
+    async with _conn() as db:
+        async with db.execute(
+            "SELECT value FROM bot_settings WHERE key = ?", (key,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else default
+
+
+async def set_setting(key: str, value: str) -> None:
+    async with _conn() as db:
+        await db.execute(
+            """
+            INSERT INTO bot_settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """,
+            (key, value),
+        )
+        await db.commit()
+
+
+async def get_all_settings() -> dict[str, str]:
+    async with _conn() as db:
+        async with db.execute("SELECT key, value FROM bot_settings") as cur:
+            rows = await cur.fetchall()
+            return {r[0]: r[1] for r in rows}
+
+
+# ============ ADMIN LOGS ============
+
+async def log_admin_action(
+    admin_id: int, action: str, target_id: Optional[int] = None, details: str = ""
+) -> None:
+    async with _conn() as db:
+        await db.execute(
+            "INSERT INTO admin_logs (admin_id, action, target_id, details) VALUES (?, ?, ?, ?)",
+            (admin_id, action, target_id, details),
+        )
+        await db.commit()
+
+
+async def get_admin_logs(limit: int = 30) -> list[dict[str, Any]]:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM admin_logs ORDER BY created_at DESC LIMIT ?", (limit,)
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+# ============ REPORT QUEUE (ADMIN) ============
+
+async def get_pending_reports(limit: int = 20) -> list[dict[str, Any]]:
+    """Hali ko'rib chiqilmagan shikoyatlar, foydalanuvchi bo'yicha guruhlangan."""
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT
+                r.to_user_id,
+                u.name,
+                u.username,
+                COUNT(*) as count,
+                MAX(r.created_at) as last_report
+            FROM reports r
+            LEFT JOIN users u ON u.user_id = r.to_user_id
+            WHERE COALESCE(r.status, 'pending') = 'pending'
+            GROUP BY r.to_user_id
+            ORDER BY count DESC, last_report DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def get_user_reports(user_id: int) -> list[dict[str, Any]]:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT * FROM reports
+            WHERE to_user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (user_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def resolve_reports(user_id: int) -> int:
+    """Foydalanuvchiga oid barcha shikoyatlarni 'reviewed' qilish."""
+    async with _conn() as db:
+        cur = await db.execute(
+            "UPDATE reports SET status = 'reviewed' WHERE to_user_id = ?", (user_id,)
+        )
+        await db.commit()
+        return cur.rowcount or 0
+
+
+# ============ FILTERED BROADCAST AUDIENCE ============
+
+async def get_audience_ids(filter_type: str, value: str = "") -> list[int]:
+    """
+    filter_type:
+      - 'all' — bloklanmagan barcha
+      - 'male' — faqat erkaklar
+      - 'female' — faqat ayollar
+      - 'region' — value = viloyat nomi (LIKE qidiruv)
+      - 'active' — so'nggi 7 kunda online bo'lgan
+      - 'premium' — premium muddatli foydalanuvchilar
+    """
+    async with _conn() as db:
+        if filter_type == "male":
+            sql = "SELECT user_id FROM users WHERE is_banned = 0 AND gender = 'M'"
+            params: tuple = ()
+        elif filter_type == "female":
+            sql = "SELECT user_id FROM users WHERE is_banned = 0 AND gender = 'F'"
+            params = ()
+        elif filter_type == "region":
+            sql = "SELECT user_id FROM users WHERE is_banned = 0 AND city LIKE ?"
+            params = (f"%{value}%",)
+        elif filter_type == "active":
+            sql = (
+                "SELECT user_id FROM users "
+                "WHERE is_banned = 0 AND last_seen >= datetime('now', '-7 days')"
+            )
+            params = ()
+        elif filter_type == "premium":
+            sql = (
+                "SELECT user_id FROM users "
+                "WHERE is_banned = 0 AND premium_until IS NOT NULL "
+                "AND premium_until > CURRENT_TIMESTAMP"
+            )
+            params = ()
+        else:
+            sql = "SELECT user_id FROM users WHERE is_banned = 0"
+            params = ()
+
+        async with db.execute(sql, params) as cur:
+            return [r[0] for r in await cur.fetchall()]
+
+
+# ============ EXTENDED STATS ============
+
+async def detailed_stats() -> dict[str, Any]:
+    """Dashboard uchun batafsil real-time statistika."""
+    async with _conn() as db:
+        result: dict[str, Any] = {}
+        queries = {
+            "total_users": "SELECT COUNT(*) FROM users",
+            "with_profile": "SELECT COUNT(*) FROM users WHERE photo_id IS NOT NULL",
+            "active_users": "SELECT COUNT(*) FROM users WHERE is_active=1 AND is_banned=0",
+            "banned_users": "SELECT COUNT(*) FROM users WHERE is_banned=1",
+            "shadow_banned": "SELECT COUNT(*) FROM users WHERE is_shadow_banned=1",
+            "males": "SELECT COUNT(*) FROM users WHERE gender='M'",
+            "females": "SELECT COUNT(*) FROM users WHERE gender='F'",
+            "online_24h": (
+                "SELECT COUNT(*) FROM users WHERE last_seen >= datetime('now','-1 day')"
+            ),
+            "online_7d": (
+                "SELECT COUNT(*) FROM users WHERE last_seen >= datetime('now','-7 days')"
+            ),
+            "new_today": (
+                "SELECT COUNT(*) FROM users WHERE created_at >= date('now')"
+            ),
+            "new_7d": (
+                "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now','-7 days')"
+            ),
+            "total_likes": "SELECT COUNT(*) FROM likes WHERE is_like=1",
+            "likes_today": (
+                "SELECT COUNT(*) FROM likes WHERE is_like=1 AND created_at >= date('now')"
+            ),
+            "total_matches": "SELECT COUNT(*) FROM matches",
+            "matches_today": (
+                "SELECT COUNT(*) FROM matches WHERE created_at >= date('now')"
+            ),
+            "active_chats": "SELECT COUNT(*)/2 FROM active_chats",
+            "total_reports": "SELECT COUNT(*) FROM reports",
+            "pending_reports": (
+                "SELECT COUNT(*) FROM reports WHERE COALESCE(status,'pending') = 'pending'"
+            ),
+        }
+        for key, sql in queries.items():
+            async with db.execute(sql) as cur:
+                row = await cur.fetchone()
+                result[key] = row[0] if row else 0
+
+        # Top 5 viloyat
+        async with db.execute(
+            """
+            SELECT
+                CASE WHEN INSTR(city, ',') > 0
+                     THEN TRIM(SUBSTR(city, 1, INSTR(city, ',') - 1))
+                     ELSE city
+                END AS region,
+                COUNT(*) AS cnt
+            FROM users
+            WHERE city IS NOT NULL AND city != ''
+            GROUP BY region
+            ORDER BY cnt DESC
+            LIMIT 5
+            """
+        ) as cur:
+            result["top_regions"] = [(r[0], r[1]) for r in await cur.fetchall()]
+
+        return result
+
+
 # ============ SEARCH / FEED ============
 
 async def get_next_candidate(user_id: int) -> Optional[dict[str, Any]]:
@@ -188,6 +457,7 @@ async def get_next_candidate(user_id: int) -> Optional[dict[str, Any]]:
             WHERE u.user_id != ?
               AND u.is_active = 1
               AND u.is_banned = 0
+              AND COALESCE(u.is_shadow_banned, 0) = 0
               AND u.photo_id IS NOT NULL
               {gender_filter}
               {looking_back}

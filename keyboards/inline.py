@@ -86,11 +86,126 @@ def report_reasons_kb(partner_id: int) -> InlineKeyboardMarkup:
 
 
 def admin_menu_kb() -> InlineKeyboardMarkup:
+    """Admin V2 — to'liq boshqaruv markazi."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📊 Statistika", callback_data="adm:stats")],
-            [InlineKeyboardButton(text="📢 Broadcast", callback_data="adm:broadcast")],
-            [InlineKeyboardButton(text="🚫 Ban", callback_data="adm:ban"),
+            [InlineKeyboardButton(text="📊 Dashboard", callback_data="adm:dashboard")],
+            [InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="adm:users"),
+             InlineKeyboardButton(text="⚠️ Shikoyatlar", callback_data="adm:reports")],
+            [InlineKeyboardButton(text="📢 Broadcast", callback_data="adm:broadcast_menu"),
+             InlineKeyboardButton(text="🤖 Sozlamalar", callback_data="adm:settings")],
+            [InlineKeyboardButton(text="🧪 Test tizimi", callback_data="adm:devtools"),
+             InlineKeyboardButton(text="📂 Loglar", callback_data="adm:logs")],
+            [InlineKeyboardButton(text="⚙️ Server holati", callback_data="adm:server")],
+        ]
+    )
+
+
+def admin_back_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Admin panelga qaytish", callback_data="adm:back")],
+        ]
+    )
+
+
+def admin_users_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔍 Foydalanuvchi qidirish", callback_data="adm:search")],
+            [InlineKeyboardButton(text="🚫 Ban (ID bo'yicha)", callback_data="adm:ban"),
              InlineKeyboardButton(text="✅ Unban", callback_data="adm:unban")],
+            [InlineKeyboardButton(text="« Orqaga", callback_data="adm:back")],
+        ]
+    )
+
+
+def admin_user_card_kb(user_id: int, is_banned: bool, is_shadow: bool) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if is_banned:
+        rows.append([InlineKeyboardButton(text="✅ Unban", callback_data=f"adm:uact:unban:{user_id}")])
+    else:
+        rows.append([InlineKeyboardButton(text="🚫 Ban", callback_data=f"adm:uact:ban:{user_id}")])
+
+    if is_shadow:
+        rows.append([InlineKeyboardButton(text="👁 Shadowban olib tashlash", callback_data=f"adm:uact:unshadow:{user_id}")])
+    else:
+        rows.append([InlineKeyboardButton(text="👁 Shadowban", callback_data=f"adm:uact:shadow:{user_id}")])
+
+    rows.append([InlineKeyboardButton(text="📜 Shikoyatlar tarixi", callback_data=f"adm:uact:reports:{user_id}")])
+    rows.append([InlineKeyboardButton(text="🗑 Anketani butunlay o'chirish", callback_data=f"adm:uact:delete:{user_id}")])
+    rows.append([InlineKeyboardButton(text="« Orqaga", callback_data="adm:users")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_broadcast_filter_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="👥 Hammasiga", callback_data="adm:bcast:all")],
+            [InlineKeyboardButton(text="👨 Faqat erkaklar", callback_data="adm:bcast:male"),
+             InlineKeyboardButton(text="👩 Faqat ayollar", callback_data="adm:bcast:female")],
+            [InlineKeyboardButton(text="🟢 Faqat faollar (7 kun)", callback_data="adm:bcast:active")],
+            [InlineKeyboardButton(text="🏙 Viloyat bo'yicha", callback_data="adm:bcast:region")],
+            [InlineKeyboardButton(text="« Orqaga", callback_data="adm:back")],
+        ]
+    )
+
+
+def admin_reports_kb(reports: list[dict]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for r in reports[:15]:
+        name = r.get("name") or f"ID:{r['to_user_id']}"
+        label = f"⚠️ {name} ({r['count']} ta)"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"adm:rpt:{r['to_user_id']}")])
+    rows.append([InlineKeyboardButton(text="« Orqaga", callback_data="adm:back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_report_actions_kb(user_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🚫 Foydalanuvchini ban", callback_data=f"adm:uact:ban:{user_id}"),
+             InlineKeyboardButton(text="👁 Shadowban", callback_data=f"adm:uact:shadow:{user_id}")],
+            [InlineKeyboardButton(text="✅ Shikoyatlarni yopish", callback_data=f"adm:rptr:{user_id}")],
+            [InlineKeyboardButton(text="« Orqaga", callback_data="adm:reports")],
+        ]
+    )
+
+
+def admin_settings_kb(settings: dict[str, str]) -> InlineKeyboardMarkup:
+    def b(name: str, key: str) -> str:
+        return f"{'✅' if settings.get(key) == '1' else '❌'} {name}"
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=b("Ro'yxatdan o'tish", "registration_enabled"),
+                                  callback_data="adm:set_toggle:registration_enabled")],
+            [InlineKeyboardButton(text=b("Avto-ban", "auto_ban_enabled"),
+                                  callback_data="adm:set_toggle:auto_ban_enabled")],
+            [InlineKeyboardButton(
+                text=f"⚙️ Avto-ban chegarasi: {settings.get('auto_ban_threshold', '3')}",
+                callback_data="adm:set_edit:auto_ban_threshold",
+            )],
+            [InlineKeyboardButton(
+                text=f"🎂 Minimal yosh: {settings.get('min_age', '14')}",
+                callback_data="adm:set_edit:min_age",
+            )],
+            [InlineKeyboardButton(
+                text=f"❤️ Kunlik like cheklovi: {settings.get('daily_likes_limit', '0') or 'cheksiz'}",
+                callback_data="adm:set_edit:daily_likes_limit",
+            )],
+            [InlineKeyboardButton(text="« Orqaga", callback_data="adm:back")],
+        ]
+    )
+
+
+def admin_devtools_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🧪 Test anketalar qo'shish", callback_data="adm:dev:seed"),
+             InlineKeyboardButton(text="🗑 Testlarni o'chirish", callback_data="adm:dev:unseed")],
+            [InlineKeyboardButton(text="💾 DB Backup", callback_data="adm:dev:backup")],
+            [InlineKeyboardButton(text="📤 CSV Export", callback_data="adm:dev:csv")],
+            [InlineKeyboardButton(text="« Orqaga", callback_data="adm:back")],
         ]
     )
