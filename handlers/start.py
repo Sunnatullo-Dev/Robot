@@ -30,6 +30,7 @@ HELP_TEXT = (
     "/profile — o'z anketam\n"
     "/search — qidirishni boshlash\n"
     "/matches — mosliklarim\n"
+    "/cancel — joriy amalni bekor qilish\n"
     "/help — yordam\n\n"
     "❗️ Qoidalarni buzgan foydalanuvchilar bloklanadi."
 )
@@ -74,6 +75,23 @@ async def cmd_help(message: Message) -> None:
 async def to_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("🏠 Asosiy menyu", reply_markup=reply.main_menu())
+
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext) -> None:
+    """Har qanday FSM holatidan chiqib, asosiy menyuga qaytish."""
+    current = await state.get_state()
+    await state.clear()
+    if current is not None:
+        await message.answer(
+            "❌ Joriy amal bekor qilindi.",
+            reply_markup=reply.main_menu(),
+        )
+    else:
+        await message.answer(
+            "Bekor qilish uchun hech narsa yo'q.",
+            reply_markup=reply.main_menu(),
+        )
 
 
 @router.message(F.text == "❌ Bekor qilish")

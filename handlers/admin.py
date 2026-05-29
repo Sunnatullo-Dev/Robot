@@ -59,36 +59,55 @@ async def admin_broadcast_start(call: CallbackQuery, state: FSMContext, config: 
     await state.set_state(AdminFlow.broadcast)
     await call.answer()
     await call.message.answer(  # type: ignore[union-attr]
-        "📢 Yuboriladigan xabar matnini kiriting (yoki ❌ Bekor qilish):",
+        "📢 <b>Broadcast — barchaga yuborish</b>\n\n"
+        "Endi <b>istalgan xabarni yuboring</b>:\n"
+        "• 📝 Matn (HTML formatlash bilan)\n"
+        "• 📷 Rasm + caption\n"
+        "• 🎬 Video / 🎵 Ovoz / 📁 Hujjat\n"
+        "• 🎨 Stiker / 🎞 GIF\n"
+        "• ↪️ Forward qilingan xabar\n\n"
+        "Bekor qilish: ❌ Bekor qilish yoki /cancel",
         reply_markup=reply.cancel_kb(),
     )
 
 
-@router.message(AdminFlow.broadcast, F.text)
+@router.message(AdminFlow.broadcast, F.text == "❌ Bekor qilish")
+async def admin_broadcast_cancel(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Bekor qilindi.", reply_markup=reply.main_menu())
+
+
+@router.message(AdminFlow.broadcast)
 async def admin_broadcast_send(
     message: Message, state: FSMContext, bot: Bot, config: Config,
 ) -> None:
+    """copy_message orqali har qanday turdagi xabar (matn, rasm, video,
+    forward, stiker va h.k.) barcha bloklanmagan foydalanuvchilarga
+    yuboriladi. Forward attribution ko'rinmaydi.
+    """
     if message.from_user is None or not _is_admin(message.from_user.id, config):
         return
-    if message.text == "❌ Bekor qilish":
-        await state.clear()
-        await message.answer("Bekor qilindi.", reply_markup=reply.main_menu())
-        return
 
-    text = message.text or ""
     await state.clear()
     ids = await models.all_active_user_ids()
+    if not ids:
+        await message.answer("Yuboradigan foydalanuvchi yo'q.", reply_markup=reply.main_menu())
+        return
+
     sent, failed = 0, 0
     status = await message.answer(f"📤 Yuborilmoqda... 0/{len(ids)}")
 
+    from_chat = message.chat.id
+    msg_id = message.message_id
+
     for i, uid in enumerate(ids, 1):
         try:
-            await bot.send_message(uid, text)
+            await bot.copy_message(chat_id=uid, from_chat_id=from_chat, message_id=msg_id)
             sent += 1
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
             try:
-                await bot.send_message(uid, text)
+                await bot.copy_message(chat_id=uid, from_chat_id=from_chat, message_id=msg_id)
                 sent += 1
             except (TelegramForbiddenError, TelegramBadRequest):
                 failed += 1
@@ -105,9 +124,14 @@ async def admin_broadcast_send(
                 pass
         await asyncio.sleep(0.04)  # ~25 msg/sec — Telegram limiti ostida
 
-    await status.edit_text(
-        f"✅ Tarqatish tugadi.\n\nYetkazildi: <b>{sent}</b>\nXato: <b>{failed}</b>"
-    )
+    try:
+        await status.edit_text(
+            f"✅ Tarqatish tugadi.\n\nYetkazildi: <b>{sent}</b>\nXato: <b>{failed}</b>"
+        )
+    except TelegramBadRequest:
+        await message.answer(
+            f"✅ Tarqatish tugadi.\n\nYetkazildi: <b>{sent}</b>\nXato: <b>{failed}</b>"
+        )
 
 
 @router.callback_query(F.data == "adm:ban")
@@ -191,12 +215,6 @@ async def cmd_seed_start(
         f"Bekor qilish uchun: /cancel",
         reply_markup=reply.cancel_kb(),
     )
-
-
-@router.message(Command("cancel"), AdminFlow.seed_photo)
-async def cmd_seed_cancel(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer("Bekor qilindi.", reply_markup=reply.main_menu())
 
 
 @router.message(AdminFlow.seed_photo, F.text == "❌ Bekor qilish")
