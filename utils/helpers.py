@@ -1,5 +1,13 @@
+import html
 import math
 from typing import Any, Optional
+
+
+def esc(text: Optional[str]) -> str:
+    """HTML escape — foydalanuvchi matnidagi <, >, & belgilarni xavfsiz qiladi."""
+    if not text:
+        return ""
+    return html.escape(str(text), quote=False)
 
 
 def gender_text(code: str) -> str:
@@ -32,10 +40,10 @@ def format_distance(km: float) -> str:
 
 
 def format_profile(user: dict[str, Any], distance_km: Optional[float] = None) -> str:
-    name = user.get("name") or "—"
+    name = esc(user.get("name")) or "—"
     age = user.get("age") or "—"
-    city = user.get("city") or "—"
-    bio = user.get("bio") or ""
+    city = esc(user.get("city")) or "—"
+    bio = esc(user.get("bio"))
     g = user.get("gender") or ""
 
     text = (

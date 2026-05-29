@@ -9,7 +9,7 @@ from aiogram.types import Message
 from database import models
 from keyboards import inline, reply
 from states.user_states import ReportFlow
-from utils.helpers import format_profile
+from utils.helpers import esc, format_profile
 
 router = Router(name="search")
 logger = logging.getLogger(__name__)
@@ -65,12 +65,14 @@ async def like(message: Message, state: FSMContext, bot: Bot) -> None:
     target_user = await models.get_user(target)
 
     if is_match and me and target_user:
-        my_uname = f"@{me['username']}" if me.get("username") else "—"
-        t_uname = f"@{target_user['username']}" if target_user.get("username") else "—"
+        my_uname = f"@{esc(me['username'])}" if me.get("username") else "—"
+        t_uname = f"@{esc(target_user['username'])}" if target_user.get("username") else "—"
+        my_name = esc(me["name"])
+        t_name = esc(target_user["name"])
 
         await message.answer(
             f"💞 <b>Mos keldi!</b>\n\n"
-            f"{target_user['name']} ham sizni yoqtirdi.\n"
+            f"{t_name} ham sizni yoqtirdi.\n"
             f"Username: {t_uname}\n\n"
             f"Suhbat boshlash uchun <b>💌 Mosliklarim</b> bo'limiga o'ting.",
         )
@@ -78,7 +80,7 @@ async def like(message: Message, state: FSMContext, bot: Bot) -> None:
             await bot.send_message(
                 target,
                 f"💞 <b>Mos keldi!</b>\n\n"
-                f"{me['name']} sizni yoqtirdi.\n"
+                f"{my_name} sizni yoqtirdi.\n"
                 f"Username: {my_uname}\n\n"
                 f"Suhbat boshlash uchun <b>💌 Mosliklarim</b> bo'limiga o'ting.",
             )

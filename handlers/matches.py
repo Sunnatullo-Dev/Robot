@@ -4,7 +4,7 @@ from aiogram.types import CallbackQuery, Message
 
 from database import models
 from keyboards import inline, reply
-from utils.helpers import format_profile
+from utils.helpers import esc, format_profile
 
 router = Router(name="matches")
 
@@ -41,7 +41,7 @@ async def view_match(call: CallbackQuery) -> None:
         await call.message.answer("Foydalanuvchi topilmadi.")  # type: ignore[union-attr]
         return
 
-    uname = f"@{partner['username']}" if partner.get("username") else "(yashirin)"
+    uname = f"@{esc(partner['username'])}" if partner.get("username") else "(yashirin)"
     caption = (
         f"{format_profile(partner)}\n\n"
         f"Telegram: {uname}"

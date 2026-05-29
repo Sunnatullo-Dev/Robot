@@ -6,9 +6,20 @@ from aiogram.types import TelegramObject
 
 
 class ThrottlingMiddleware(BaseMiddleware):
+    """Bir foydalanuvchidan kelayotgan tezkor takroriy so'rovlarni cheklaydi.
+
+    Xotira to'ldirilib ketmasligi uchun har 1000 ta yozuvda eski (2 daqiqadan
+    eski) yozuvlar tozalanadi.
+    """
+
     def __init__(self, rate_limit: float = 0.5) -> None:
         self.rate_limit = rate_limit
         self._last: dict[int, float] = {}
+
+    def _gc_if_needed(self, now: float) -> None:
+        if len(self._last) > 1000:
+            cutoff = now - 120
+            self._last = {uid: t for uid, t in self._last.items() if t >= cutoff}
 
     async def __call__(
         self,
@@ -23,4 +34,5 @@ class ThrottlingMiddleware(BaseMiddleware):
             if now - last < self.rate_limit:
                 return None
             self._last[user.id] = now
+            self._gc_if_needed(now)
         return await handler(event, data)

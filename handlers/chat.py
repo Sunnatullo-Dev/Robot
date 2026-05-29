@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from database import models
 from keyboards import inline, reply
 from states.user_states import ReportFlow
+from utils.helpers import esc
 
 router = Router(name="chat")
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ async def chat_start(call: CallbackQuery, bot: Bot) -> None:
     await call.answer()
 
     me = await models.get_user(call.from_user.id)
-    name_me = me["name"] if me else "Foydalanuvchi"
+    name_me = esc(me["name"]) if me else "Foydalanuvchi"
 
     await call.message.answer(  # type: ignore[union-attr]
         "💬 <b>Anonim suhbat boshlandi.</b>\n"
@@ -149,6 +150,13 @@ async def relay_text(message: Message, bot: Bot) -> None:
 
     partner = await models.get_chat_partner(message.from_user.id)
     if not partner:
+        return
+    if await models.is_banned(partner):
+        await models.stop_chat(message.from_user.id)
+        await message.answer(
+            "ℹ️ Partner bloklangan. Suhbat tugatildi.",
+            reply_markup=reply.main_menu(),
+        )
         return
     try:
         await bot.send_message(partner, message.text)

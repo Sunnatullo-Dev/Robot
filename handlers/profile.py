@@ -14,6 +14,12 @@ from utils.helpers import format_profile, parse_age
 router = Router(name="profile")
 logger = logging.getLogger(__name__)
 
+# Faqat yuqori darajadagi edit buyruqlari (region/city callbacklari emas)
+_EDIT_TOP_COMMANDS = {
+    "edit:name", "edit:age", "edit:city", "edit:location",
+    "edit:bio", "edit:photo", "edit:delete",
+}
+
 
 @router.message(StateFilter(EditProfile), F.text == "❌ Bekor qilish")
 async def edit_cancel(message: Message, state: FSMContext) -> None:
@@ -51,26 +57,20 @@ async def settings(message: Message) -> None:
     await _send_profile(message, message.from_user.id)
 
 
-@router.callback_query(F.data.startswith("edit:"))
+@router.callback_query(F.data.in_(_EDIT_TOP_COMMANDS))
 async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
-    logger.info("edit_callback: data=%s user=%s", call.data, call.from_user.id if call.from_user else None)
     if call.data is None or call.from_user is None:
-        logger.warning("edit_callback: early return data/user None")
         return
     field = call.data.split(":", 1)[1]
     await call.answer()
 
     if field == "delete":
-        try:
-            await models.update_field(call.from_user.id, "is_active", 0)
-            await call.message.answer(  # type: ignore[union-attr]
-                "🗑 Anketangiz o'chirildi. Qayta yaratish uchun /start bosing.",
-                reply_markup=reply.remove,
-            )
-            logger.info("edit_callback delete: OK")
-        except Exception as e:
-            logger.exception("edit_callback delete FAILED: %s", e)
-            await call.message.answer(f"❗️ Xatolik: {e}")  # type: ignore[union-attr]
+        await models.update_field(call.from_user.id, "is_active", 0)
+        await state.clear()
+        await call.message.answer(  # type: ignore[union-attr]
+            "🗑 Anketangiz o'chirildi. Qayta yaratish uchun /start bosing.",
+            reply_markup=reply.remove,
+        )
         return
 
     if field == "city":

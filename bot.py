@@ -2,10 +2,12 @@ import asyncio
 import logging
 import sys
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import CallbackQuery, ErrorEvent, Message
 
 from config import load_config
 from database.db import init_db
@@ -18,7 +20,39 @@ from handlers import (
     search,
     start,
 )
+from middlewares.banned import BannedMiddleware
 from middlewares.throttling import ThrottlingMiddleware
+
+
+def _build_fallback_router() -> Router:
+    """Eng oxirgi router — boshqalar tushira olmagan callback va xatolarni
+    silliq ishlatish uchun.
+    """
+    r = Router(name="fallback")
+
+    @r.callback_query()
+    async def stale_callback(call: CallbackQuery) -> None:
+        # Hech qanday handler tushira olmagan eski tugma — sticker emas, foydalanuvchi
+        # eski xabardagi tugmani bosgan bo'lishi mumkin
+        await call.answer(
+            "⌛ Bu tugma muddati o'tdi yoki bekor qilingan. /start bilan qaytadan boshlang.",
+            show_alert=True,
+        )
+
+    return r
+
+
+async def _on_error(event: ErrorEvent) -> None:
+    """Global xato ushlovchi — botning faollik holatini buzmaslik uchun."""
+    logging.exception("Unhandled exception: %s", event.exception)
+    msg = event.update.message or (
+        event.update.callback_query.message if event.update.callback_query else None
+    )
+    if isinstance(msg, Message):
+        try:
+            await msg.answer("❗️ Texnik xatolik yuz berdi. Birozdan keyin qaytadan urinib ko'ring.")
+        except (TelegramBadRequest, TelegramForbiddenError):
+            pass
 
 
 async def main() -> None:
@@ -38,8 +72,14 @@ async def main() -> None:
 
     dp["config"] = config
 
+    # Bloklangan foydalanuvchilarni ushlash — boshqa hech narsaga o'tkazmaslik
+    dp.message.middleware(BannedMiddleware())
+    dp.callback_query.middleware(BannedMiddleware())
+
     dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
     dp.callback_query.middleware(ThrottlingMiddleware(rate_limit=0.3))
+
+    dp.errors.register(_on_error)
 
     dp.include_routers(
         start.router,
@@ -49,6 +89,7 @@ async def main() -> None:
         matches.router,
         chat.router,
         admin.router,
+        _build_fallback_router(),  # OXIRGI: eski tugmalar uchun
     )
 
     await bot.delete_webhook(drop_pending_updates=True)

@@ -1,5 +1,3 @@
-import logging
-
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -12,7 +10,6 @@ from states.user_states import Registration
 from utils.helpers import format_profile, parse_age
 
 router = Router(name="registration")
-logger = logging.getLogger(__name__)
 
 
 @router.message(StateFilter(Registration), F.text == "❌ Bekor qilish")
@@ -69,7 +66,6 @@ async def reg_gender(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(Registration.city, F.data.startswith("reg:r:"))
 async def reg_region(call: CallbackQuery, state: FSMContext) -> None:
-    logger.info("reg_region called: data=%s", call.data)
     if call.data is None or call.message is None:
         return
     idx = int(call.data.split(":")[2])
@@ -78,13 +74,14 @@ async def reg_region(call: CallbackQuery, state: FSMContext) -> None:
         await call.answer("Viloyat topilmadi.", show_alert=True)
         return
     await call.answer()
+    from aiogram.exceptions import TelegramBadRequest
     try:
         await call.message.edit_text(  # type: ignore[union-attr]
             f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
             reply_markup=inline.districts_kb("reg", idx),
         )
-    except Exception as e:
-        logger.exception("reg_region edit_text FAILED: %s", e)
+    except TelegramBadRequest:
+        # Eski xabar tahrirlanmasa, yangisini yuboramiz
         await call.message.answer(  # type: ignore[union-attr]
             f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
             reply_markup=inline.districts_kb("reg", idx),

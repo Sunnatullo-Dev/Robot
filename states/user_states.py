@@ -5,7 +5,6 @@ class Registration(StatesGroup):
     name = State()
     age = State()
     gender = State()
-    looking_for = State()
     city = State()
     location = State()
     bio = State()
@@ -14,14 +13,12 @@ class Registration(StatesGroup):
 
 
 class EditProfile(StatesGroup):
-    choose_field = State()
     name = State()
     age = State()
     city = State()
     location = State()
     bio = State()
     photo = State()
-    looking_for = State()
 
 
 class ReportFlow(StatesGroup):
