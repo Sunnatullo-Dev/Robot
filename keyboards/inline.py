@@ -42,7 +42,6 @@ def edit_profile_kb() -> InlineKeyboardMarkup:
              InlineKeyboardButton(text="📍 Lokatsiya", callback_data="edit:location")],
             [InlineKeyboardButton(text="💬 Bio", callback_data="edit:bio"),
              InlineKeyboardButton(text="📷 Rasm", callback_data="edit:photo")],
-            [InlineKeyboardButton(text="💕 Kimni qidirish", callback_data="edit:looking_for")],
             [InlineKeyboardButton(text="🗑 Anketani o'chirish", callback_data="edit:delete")],
         ]
     )

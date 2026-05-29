@@ -52,32 +52,14 @@ async def reg_gender(message: Message, state: FSMContext) -> None:
     text = message.text or ""
     if "Erkak" in text:
         gender = "M"
+        looking_for = "F"  # Erkaklar — ayollarni qidirishadi
     elif "Ayol" in text:
         gender = "F"
+        looking_for = "M"  # Ayollar — erkaklarni qidirishadi
     else:
         await message.answer("❗️ Tugmalardan birini tanlang.")
         return
-    await state.update_data(gender=gender)
-    await message.answer(
-        "💕 Kimni qidirayapsiz?",
-        reply_markup=reply.looking_for_kb(),
-    )
-    await state.set_state(Registration.looking_for)
-
-
-@router.message(Registration.looking_for, F.text)
-async def reg_looking_for(message: Message, state: FSMContext) -> None:
-    text = message.text or ""
-    if "Erkak" in text:
-        lf = "M"
-    elif "Ayol" in text:
-        lf = "F"
-    elif "Farqi" in text:
-        lf = "A"
-    else:
-        await message.answer("❗️ Tugmalardan birini tanlang.")
-        return
-    await state.update_data(looking_for=lf)
+    await state.update_data(gender=gender, looking_for=looking_for)
     await message.answer(
         "🏙 <b>Viloyatingizni tanlang:</b>",
         reply_markup=inline.regions_kb("reg"),
@@ -87,9 +69,8 @@ async def reg_looking_for(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(Registration.city, F.data.startswith("reg:r:"))
 async def reg_region(call: CallbackQuery, state: FSMContext) -> None:
-    logger.info("DEBUG reg_region: data=%s msg=%s", call.data, type(call.message).__name__ if call.message else None)
+    logger.info("reg_region called: data=%s", call.data)
     if call.data is None or call.message is None:
-        logger.warning("DEBUG reg_region: early return (data/msg None)")
         return
     idx = int(call.data.split(":")[2])
     region = get_region(idx)
@@ -102,10 +83,8 @@ async def reg_region(call: CallbackQuery, state: FSMContext) -> None:
             f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
             reply_markup=inline.districts_kb("reg", idx),
         )
-        logger.info("DEBUG reg_region: edit_text OK for %s", region["name"])
     except Exception as e:
-        logger.exception("DEBUG reg_region: edit_text FAILED: %s", e)
-        # Fallback: send new message
+        logger.exception("reg_region edit_text FAILED: %s", e)
         await call.message.answer(  # type: ignore[union-attr]
             f"🏙 <b>{region['name']}</b>\nTuman/shaharni tanlang:",
             reply_markup=inline.districts_kb("reg", idx),

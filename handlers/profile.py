@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -10,6 +12,7 @@ from states.user_states import EditProfile
 from utils.helpers import format_profile, parse_age
 
 router = Router(name="profile")
+logger = logging.getLogger(__name__)
 
 
 @router.message(StateFilter(EditProfile), F.text == "❌ Bekor qilish")
@@ -50,17 +53,24 @@ async def settings(message: Message) -> None:
 
 @router.callback_query(F.data.startswith("edit:"))
 async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
+    logger.info("edit_callback: data=%s user=%s", call.data, call.from_user.id if call.from_user else None)
     if call.data is None or call.from_user is None:
+        logger.warning("edit_callback: early return data/user None")
         return
     field = call.data.split(":", 1)[1]
     await call.answer()
 
     if field == "delete":
-        await models.update_field(call.from_user.id, "is_active", 0)
-        await call.message.answer(  # type: ignore[union-attr]
-            "🗑 Anketangiz o'chirildi. Qayta yaratish uchun /start bosing.",
-            reply_markup=reply.remove,
-        )
+        try:
+            await models.update_field(call.from_user.id, "is_active", 0)
+            await call.message.answer(  # type: ignore[union-attr]
+                "🗑 Anketangiz o'chirildi. Qayta yaratish uchun /start bosing.",
+                reply_markup=reply.remove,
+            )
+            logger.info("edit_callback delete: OK")
+        except Exception as e:
+            logger.exception("edit_callback delete FAILED: %s", e)
+            await call.message.answer(f"❗️ Xatolik: {e}")  # type: ignore[union-attr]
         return
 
     if field == "city":
@@ -85,7 +95,6 @@ async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
         "age": ("🎂 Yangi yosh (14-99):", EditProfile.age, reply.cancel_kb()),
         "bio": ("💬 Yangi bio:", EditProfile.bio, reply.skip_kb("🗑 Bo'sh qoldirish")),
         "photo": ("📷 Yangi rasm yuboring:", EditProfile.photo, reply.cancel_kb()),
-        "looking_for": ("💕 Kimni qidirasiz?", EditProfile.looking_for, reply.looking_for_kb()),
     }
     if field not in prompts:
         return
@@ -208,20 +217,3 @@ async def edit_location_clear(message: Message, state: FSMContext) -> None:
     await message.answer("✅ Lokatsiya o'chirildi.", reply_markup=reply.main_menu())
 
 
-@router.message(EditProfile.looking_for, F.text)
-async def edit_looking_for(message: Message, state: FSMContext) -> None:
-    if message.from_user is None:
-        return
-    text = message.text or ""
-    if "Erkak" in text:
-        lf = "M"
-    elif "Ayol" in text:
-        lf = "F"
-    elif "Farqi" in text:
-        lf = "A"
-    else:
-        await message.answer("❗️ Tugmalardan birini tanlang.")
-        return
-    await models.update_field(message.from_user.id, "looking_for", lf)
-    await state.clear()
-    await message.answer("✅ Qidiruv yo'nalishi yangilandi.", reply_markup=reply.main_menu())
