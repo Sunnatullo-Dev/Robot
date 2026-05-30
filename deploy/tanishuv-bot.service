@@ -1,0 +1,35 @@
+[Unit]
+Description=Tanishuv Bot — Telegram Dating Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=botuser
+Group=botuser
+WorkingDirectory=/opt/tanishuv-bot
+EnvironmentFile=/opt/tanishuv-bot/.env
+ExecStart=/opt/tanishuv-bot/venv/bin/python /opt/tanishuv-bot/bot.py
+
+# Avtomatik qayta ishga tushirish
+Restart=always
+RestartSec=10
+
+# Resurslar (ixtiyoriy — mantiqiy chegaralar)
+MemoryHigh=256M
+MemoryMax=512M
+
+# Loglarni journald'ga yo'naltirish
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tanishuv-bot
+
+# Xavfsizlik
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tanishuv-bot
+
+[Install]
+WantedBy=multi-user.target

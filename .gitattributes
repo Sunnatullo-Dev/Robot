@@ -1,0 +1,11 @@
+# Shell skriptlari va service fayllari Unix LF bilan saqlanishi kerak —
+# Windows'da edit qilinsa ham, Linux'da to'g'ri ishlaydi.
+*.sh text eol=lf
+deploy/*.service text eol=lf
+deploy/*.sh text eol=lf
+
+# Boshqa fayllar tizimga qarab (Windows: CRLF, Linux: LF)
+*.py text
+*.md text
+*.txt text
+*.json text
