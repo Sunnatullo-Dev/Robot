@@ -3,6 +3,25 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from data.regions import REGIONS
 
 
+def like_response_kb(liker_id: int) -> InlineKeyboardMarkup:
+    """Like notification ostidagi tugmalar (recipient uchun)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Suhbat boshlash", callback_data=f"likeresp:chat:{liker_id}")],
+            [InlineKeyboardButton(text="👎 Yoqmadi", callback_data=f"likeresp:no:{liker_id}")],
+        ]
+    )
+
+
+def chat_start_only_kb(partner_id: int) -> InlineKeyboardMarkup:
+    """Bitta tugma: 💬 Suhbat boshlash."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Suhbat boshlash", callback_data=f"chat_start:{partner_id}")],
+        ]
+    )
+
+
 def candidate_dm_kb(partner_id: int) -> InlineKeyboardMarkup:
     """Qidiruvdagi anketa tagidagi tugma — Lichkaga o'tish (premium)."""
     return InlineKeyboardMarkup(
