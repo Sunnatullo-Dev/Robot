@@ -16,6 +16,7 @@ from handlers import (
     admin,
     chat,
     matches,
+    premium,
     profile,
     registration,
     search,
@@ -89,6 +90,7 @@ async def main() -> None:
         profile.router,
         search.router,
         matches.router,
+        premium.router,  # MUHIM: chat.router'dan oldin (dm:, prem: callbacklar)
         chat.router,
         admin.router,
         _build_fallback_router(),  # OXIRGI: eski tugmalar uchun

@@ -12,6 +12,9 @@ class Config:
     db_path: str
     channel_username: str
     require_subscription: bool
+    premium_price: str
+    premium_card: str
+    premium_days: int
 
 
 def load_config() -> Config:
@@ -28,4 +31,7 @@ def load_config() -> Config:
         db_path=os.getenv("DB_PATH", "tanishuv.db"),
         channel_username=os.getenv("CHANNEL_USERNAME", "").strip(),
         require_subscription=os.getenv("REQUIRE_SUBSCRIPTION", "false").lower() == "true",
+        premium_price=os.getenv("PREMIUM_PRICE", "9 999 so'm"),
+        premium_card=os.getenv("PREMIUM_CARD", "5614 6847 0909 0318"),
+        premium_days=int(os.getenv("PREMIUM_DAYS", "30")),
     )

@@ -33,12 +33,13 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
 
     await state.update_data(current_candidate=candidate["user_id"])
     distance = candidate.pop("_distance", None)
+    # Anketa rasmi ostida inline tugma "💌 Lichkaga o'tish"
     await message.answer_photo(
         photo=candidate["photo_id"],
         caption=format_profile(candidate, distance_km=distance),
-        reply_markup=reply.search_kb(),
+        reply_markup=inline.candidate_dm_kb(candidate["user_id"]),
     )
-    # Agar foydalanuvchining ovoz biografiyasi bo'lsa, uni ham yuborish
+    # Ovozli bio bo'lsa, qo'shimcha xabar
     if candidate.get("voice_id"):
         try:
             await message.answer_voice(candidate["voice_id"], caption="🎤 Ovozli salomlashish")
@@ -59,6 +60,8 @@ async def start_search(message: Message, state: FSMContext) -> None:
             reply_markup=reply.main_menu(),
         )
         return
+    # Reply keyboardni o'rnatamiz (❤️ 👎 🚫 🏠) — keyingi photo'lar inline tugmali bo'ladi
+    await message.answer("🔍 <b>Qidiruv boshlandi</b>", reply_markup=reply.search_kb())
     await _show_next(message, state, message.from_user.id)
 
 

@@ -3,6 +3,37 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from data.regions import REGIONS
 
 
+def candidate_dm_kb(partner_id: int) -> InlineKeyboardMarkup:
+    """Qidiruvdagi anketa tagidagi tugma — Lichkaga o'tish (premium)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💌 Lichkaga o'tish", callback_data=f"dm:{partner_id}")],
+        ]
+    )
+
+
+def premium_paywall_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📸 To'lov chekini yuborish", callback_data="prem:paid")],
+            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="prem:cancel")],
+        ]
+    )
+
+
+def open_chat_kb(username: str | None, user_id: int) -> InlineKeyboardMarkup:
+    """Telegram'da odamning lichkasini ochish tugmasi."""
+    if username:
+        url = f"https://t.me/{username}"
+        text = f"➡️ @{username}"
+    else:
+        url = f"tg://user?id={user_id}"
+        text = "➡️ Chatga o'tish"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=text, url=url)]]
+    )
+
+
 def regions_kb(prefix: str) -> InlineKeyboardMarkup:
     """Barcha viloyatlarni 2 ustunda ko'rsatadi. prefix: 'reg' yoki 'edit'."""
     rows: list[list[InlineKeyboardButton]] = []

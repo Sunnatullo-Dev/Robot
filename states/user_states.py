@@ -26,6 +26,10 @@ class ReportFlow(StatesGroup):
     reason = State()
 
 
+class PremiumFlow(StatesGroup):
+    waiting_receipt = State()
+
+
 class AdminFlow(StatesGroup):
     broadcast = State()
     broadcast_filter_region = State()
