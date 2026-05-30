@@ -21,6 +21,26 @@ def premium_paywall_kb() -> InlineKeyboardMarkup:
     )
 
 
+def premium_approval_kb(user_id: int, days: int = 30) -> InlineKeyboardMarkup:
+    """Adminga keladigan chek ostiga: bir tugma bilan tasdiqlash yoki rad etish."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"✅ Tasdiqlash ({days} kun)",
+                callback_data=f"premapprove:{user_id}:{days}",
+            )],
+            [InlineKeyboardButton(
+                text="❌ Rad etish",
+                callback_data=f"premreject:{user_id}",
+            )],
+            [InlineKeyboardButton(
+                text="⚙️ Boshqa muddat...",
+                callback_data=f"premcustom:{user_id}",
+            )],
+        ]
+    )
+
+
 def open_chat_kb(username: str | None, user_id: int) -> InlineKeyboardMarkup:
     """Telegram'da odamning lichkasini ochish tugmasi."""
     if username:

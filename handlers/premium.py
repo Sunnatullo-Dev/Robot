@@ -123,31 +123,39 @@ async def prem_paid_receipt(
     uname = f"@{user.username}" if user.username else "—"
 
     # Adminlarga yuborish
-    notify_text = (
+    notify_caption = (
         f"💰 <b>Premium so'rov</b>\n\n"
         f"Foydalanuvchi: <code>{user.id}</code>\n"
         f"Ism: {esc(user.first_name or '')} {esc(user.last_name or '')}\n"
         f"Username: {esc(uname)}\n\n"
-        f"Tasdiqlash uchun:\n"
-        f"<code>/setpremium {user.id} {config.premium_days}</code>"
+        f"Narxi: <b>{esc(config.premium_price)} / {config.premium_days} kun</b>"
     )
+
+    approval_kb = inline.premium_approval_kb(user.id, config.premium_days)
 
     sent_to = 0
     for admin_id in config.admin_ids:
         try:
-            await bot.send_message(admin_id, notify_text)
-            # Chekni forward qilish
+            # Chek va boshqaruv tugmalari bir xabarda
             if message.photo:
                 await bot.send_photo(
                     admin_id,
                     message.photo[-1].file_id,
-                    caption=f"#receipt #premium #u{user.id}",
+                    caption=notify_caption,
+                    reply_markup=approval_kb,
                 )
             elif message.document:
                 await bot.send_document(
                     admin_id,
                     message.document.file_id,
-                    caption=f"#receipt #premium #u{user.id}",
+                    caption=notify_caption,
+                    reply_markup=approval_kb,
+                )
+            else:
+                await bot.send_message(
+                    admin_id,
+                    notify_caption,
+                    reply_markup=approval_kb,
                 )
             sent_to += 1
         except (TelegramForbiddenError, TelegramBadRequest) as e:

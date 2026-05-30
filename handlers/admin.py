@@ -883,6 +883,100 @@ async def cmd_unseed(message: Message, config: Config) -> None:
     )
 
 
+# ============ 💎 PREMIUM TASDIQLASH (inline tugmalar) ============
+
+@router.callback_query(F.data.startswith("premapprove:"))
+async def adm_prem_approve(call: CallbackQuery, bot: Bot, config: Config) -> None:
+    if call.data is None or call.from_user is None or not _is_admin(call.from_user.id, config):
+        await call.answer("Ruxsat yo'q", show_alert=True)
+        return
+    _, uid_str, days_str = call.data.split(":")
+    user_id = int(uid_str)
+    days = int(days_str)
+
+    await models.set_premium(user_id, days)
+    await models.log_admin_action(
+        call.from_user.id, "premium_approve", user_id, details=f"days={days}"
+    )
+    await call.answer(f"✅ {days} kun premium berildi", show_alert=True)
+
+    # Foydalanuvchiga xabar
+    try:
+        await bot.send_message(
+            user_id,
+            f"🎉 <b>To'lov qabul qilindi!</b>\n\n"
+            f"Sizga <b>{days} kun 💎 Premium</b> berildi.\n\n"
+            f"Endi siz <b>💌 Lichkaga o'tish</b> tugmasi bilan istalgan "
+            f"foydalanuvchining Telegram lichkasiga to'g'ridan-to'g'ri o'ta olasiz!\n\n"
+            f"Holatingiz: /premium",
+        )
+    except (TelegramForbiddenError, TelegramBadRequest):
+        pass
+
+    # Xabarni tahrirlash — endi tugmalar kerak emas
+    if call.message:
+        try:
+            cap = call.message.caption or call.message.text or ""  # type: ignore
+            new_text = cap + f"\n\n✅ <b>Tasdiqlandi</b> — {days} kun"
+            if call.message.caption:  # type: ignore
+                await call.message.edit_caption(caption=new_text, reply_markup=None)  # type: ignore
+            else:
+                await call.message.edit_text(new_text, reply_markup=None)  # type: ignore
+        except TelegramBadRequest:
+            pass
+
+
+@router.callback_query(F.data.startswith("premreject:"))
+async def adm_prem_reject(call: CallbackQuery, bot: Bot, config: Config) -> None:
+    if call.data is None or call.from_user is None or not _is_admin(call.from_user.id, config):
+        await call.answer("Ruxsat yo'q", show_alert=True)
+        return
+    user_id = int(call.data.split(":")[1])
+    await models.log_admin_action(call.from_user.id, "premium_reject", user_id)
+    await call.answer("❌ Rad etildi", show_alert=True)
+
+    try:
+        await bot.send_message(
+            user_id,
+            "ℹ️ Sizning premium so'rovingiz rad etildi.\n\n"
+            "Sabablar (taxminiy):\n"
+            "• Chek tushunarsiz\n"
+            "• To'lov topilmadi\n"
+            "• Boshqa sabab\n\n"
+            "Aniq sabab uchun adminga to'g'ridan-to'g'ri yozing.",
+        )
+    except (TelegramForbiddenError, TelegramBadRequest):
+        pass
+
+    if call.message:
+        try:
+            cap = call.message.caption or call.message.text or ""  # type: ignore
+            new_text = cap + "\n\n❌ <b>Rad etildi</b>"
+            if call.message.caption:  # type: ignore
+                await call.message.edit_caption(caption=new_text, reply_markup=None)  # type: ignore
+            else:
+                await call.message.edit_text(new_text, reply_markup=None)  # type: ignore
+        except TelegramBadRequest:
+            pass
+
+
+@router.callback_query(F.data.startswith("premcustom:"))
+async def adm_prem_custom(call: CallbackQuery, config: Config) -> None:
+    """Admin'ga boshqa muddat tanlash uchun maslahat."""
+    if call.data is None or call.from_user is None or not _is_admin(call.from_user.id, config):
+        await call.answer("Ruxsat yo'q", show_alert=True)
+        return
+    user_id = int(call.data.split(":")[1])
+    await call.answer()
+    await call.message.answer(  # type: ignore
+        f"⚙️ Boshqa muddat berish uchun:\n"
+        f"<code>/setpremium {user_id} 60</code>  (60 kun)\n"
+        f"<code>/setpremium {user_id} 90</code>  (3 oy)\n"
+        f"<code>/setpremium {user_id} 365</code> (1 yil)\n\n"
+        f"Buyruqni ko'chiring va kerakli raqamga o'zgartiring."
+    )
+
+
 # ============ 💎 PREMIUM BOSHQARUV ============
 
 @router.message(Command("setpremium"))
