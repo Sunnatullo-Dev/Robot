@@ -10,7 +10,6 @@ from database import models
 from database.logs import EventType
 from keyboards import inline, reply
 from services.logging_service import log_event
-from services.watermark import get_watermarked_photo
 from states.user_states import ReportFlow
 from utils.helpers import esc, format_profile
 
@@ -51,17 +50,11 @@ async def _show_next(message: Message, state: FSMContext, user_id: int, bot: Bot
     await state.update_data(current_candidate=candidate["user_id"])
     distance = candidate.pop("_distance", None)
 
-    # Watermark — viewer'ning ID'sini rasmga yozamiz
-    # Screenshot tarqalganda kim olganini aniqlash uchun
-    photo_to_send = candidate["photo_id"]  # fallback: asl file_id
-    wm = await get_watermarked_photo(bot, candidate["photo_id"], user_id)
-    if wm is not None:
-        photo_to_send = wm
-
-    # Anketa rasmi ostida inline tugma "💌 Lichkaga o'tish"
-    # protect_content=True — forward va save'ni bloklaydi
+    # Watermark OLINIB TASHLANDI — viewer ID'sini ko'rsatish xavfsizlik xatari
+    # Buning o'rniga: protect_content=True (forward/save bloklash) + admin loglar
+    # (LIKE_SENT, DISLIKE_SENT eventlarida kim kimning anketasini ko'rgani saqlanadi)
     await message.answer_photo(
-        photo=photo_to_send,
+        photo=candidate["photo_id"],
         caption=format_profile(candidate, distance_km=distance),
         reply_markup=inline.candidate_dm_kb(candidate["user_id"]),
         protect_content=True,
