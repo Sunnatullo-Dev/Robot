@@ -165,6 +165,55 @@ async def is_banned(user_id: int) -> bool:
             return bool(row and row[0])
 
 
+# ============ MUTE / SAFETY ============
+
+async def set_muted(user_id: int, hours: int) -> None:
+    """Foydalanuvchini N soatga mute qilish."""
+    async with _conn() as db:
+        await db.execute(
+            "UPDATE users SET muted_until = datetime('now', ?) WHERE user_id = ?",
+            (f"+{hours} hours", user_id),
+        )
+        await db.commit()
+
+
+async def unmute(user_id: int) -> None:
+    async with _conn() as db:
+        await db.execute(
+            "UPDATE users SET muted_until = NULL WHERE user_id = ?", (user_id,),
+        )
+        await db.commit()
+
+
+async def is_muted(user_id: int) -> bool:
+    async with _conn() as db:
+        async with db.execute(
+            "SELECT muted_until FROM users "
+            "WHERE user_id = ? AND muted_until > CURRENT_TIMESTAMP",
+            (user_id,),
+        ) as cur:
+            return await cur.fetchone() is not None
+
+
+async def mark_safety_agreed(user_id: int) -> None:
+    """Foydalanuvchi xavfsizlik qoidalarini qabul qildi."""
+    async with _conn() as db:
+        await db.execute(
+            "UPDATE users SET safety_agreed_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+            (user_id,),
+        )
+        await db.commit()
+
+
+async def has_agreed_safety(user_id: int) -> bool:
+    async with _conn() as db:
+        async with db.execute(
+            "SELECT safety_agreed_at FROM users WHERE user_id = ?", (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return bool(row and row[0])
+
+
 async def set_shadow_banned(user_id: int, shadow: bool) -> None:
     """Shadowban — foydalanuvchi botda hech narsa o'zgarmagandek ko'radi,
     lekin uning anketasi qidiruvda boshqalarga ko'rinmaydi."""
@@ -806,6 +855,53 @@ async def add_report(from_user: int, to_user: int, reason: str) -> int:
         )
         await db.commit()
         return cur.lastrowid or 0
+
+
+async def save_reported_messages(
+    report_id: int, sender_id: int, messages: list[dict[str, Any]],
+) -> int:
+    """Report bo'lganda partner'ning xotiradagi xabarlarini DB ga saqlash.
+    Returns: saqlangan xabarlar soni.
+    """
+    if not messages:
+        return 0
+    async with _conn() as db:
+        params = [
+            (
+                report_id, sender_id,
+                msg.get("type", "text"),
+                (msg.get("content") or "")[:1000],
+                msg.get("file_id") or None,
+            )
+            for msg in messages
+        ]
+        await db.executemany(
+            """
+            INSERT INTO reported_messages
+                (report_id, sender_id, message_type, content, file_id)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            params,
+        )
+        await db.commit()
+        return len(params)
+
+
+async def get_reported_messages(report_id: int) -> list[dict[str, Any]]:
+    """Admin uchun: shu report bilan bog'liq xabarlar tarixi."""
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT id, report_id, sender_id, message_type, content, file_id, created_at
+            FROM reported_messages
+            WHERE report_id = ?
+            ORDER BY id ASC
+            """,
+            (report_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
 
 async def reports_count(user_id: int) -> int:

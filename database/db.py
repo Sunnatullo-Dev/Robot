@@ -152,6 +152,20 @@ async def init_db(path: str) -> None:
             CREATE INDEX IF NOT EXISTS idx_admin_logs_target
                 ON admin_logs(target_id, created_at DESC);
 
+            -- ============ CHAT MODERATION SYSTEM ============
+
+            -- Foydalanuvchining qoidabuzarliklari (filter trigger bo'lganda)
+            CREATE TABLE IF NOT EXISTS violations (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      INTEGER NOT NULL,
+                reason       TEXT NOT NULL,
+                message_text TEXT,
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_violations_user_id
+                ON violations(user_id, created_at DESC);
+
             CREATE INDEX IF NOT EXISTS idx_admin_logs_admin
                 ON admin_logs(admin_id, created_at DESC);
 
@@ -171,6 +185,8 @@ async def init_db(path: str) -> None:
             ("premium_until", "ALTER TABLE users ADD COLUMN premium_until TIMESTAMP"),
             ("is_verified", "ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0"),
             ("voice_id", "ALTER TABLE users ADD COLUMN voice_id TEXT"),
+            ("muted_until", "ALTER TABLE users ADD COLUMN muted_until TIMESTAMP"),
+            ("safety_agreed_at", "ALTER TABLE users ADD COLUMN safety_agreed_at TIMESTAMP"),
         ):
             if col not in existing_cols:
                 await db.execute(sql)

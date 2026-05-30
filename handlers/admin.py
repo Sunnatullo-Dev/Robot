@@ -1312,6 +1312,128 @@ async def cmd_seed_girls_other(message: Message) -> None:
     await message.answer("📸 Iltimos, rasm yuboring (matn yoki fayl emas).")
 
 
+@router.message(Command("evidence"))
+async def cmd_evidence(message: Message, config: Config) -> None:
+    """/evidence <report_id>  — shu report bilan saqlangan xabarlarni ko'rsatish."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(
+            "📋 <b>Foydalanish:</b>\n"
+            "<code>/evidence &lt;report_id&gt;</code>\n\n"
+            "Masalan: <code>/evidence 12</code>\n\n"
+            "Report ID'sini topish: /reports yoki Monitoring → Alerts"
+        )
+        return
+
+    report_id = int(parts[1])
+    msgs = await models.get_reported_messages(report_id)
+    if not msgs:
+        await message.answer(f"📭 Report #{report_id} uchun saqlangan xabar yo'q.")
+        return
+
+    lines = [f"<b>📜 Evidence — Report #{report_id} ({len(msgs)} xabar)</b>\n"]
+    for m in msgs[:50]:
+        ts = (m.get("created_at") or "")[:16]
+        mt = m.get("message_type", "text")
+        content = esc(m.get("content") or "")
+        if mt == "text":
+            lines.append(f"<i>{ts}</i> 💬 {content}")
+        else:
+            lines.append(f"<i>{ts}</i> 📎 [{mt}] {content}")
+
+    text = "\n".join(lines)
+    # Telegram message limit 4096
+    if len(text) > 4000:
+        text = text[:4000] + "\n\n... (qisqartirildi)"
+    await message.answer(text)
+
+
+@router.message(Command("reports"))
+async def cmd_recent_reports(message: Message, config: Config) -> None:
+    """So'nggi shikoyatlar ro'yxati (report ID + evidence olish uchun)."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    import aiosqlite
+    from database.db import get_db_path
+    async with aiosqlite.connect(get_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT r.id, r.from_user_id, r.to_user_id, r.reason, r.created_at,
+                   u.name as target_name
+            FROM reports r
+            LEFT JOIN users u ON u.user_id = r.to_user_id
+            ORDER BY r.id DESC LIMIT 20
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+
+    if not rows:
+        await message.answer("📭 Hali hech qanday shikoyat yo'q.")
+        return
+
+    lines = ["<b>⚠️ So'nggi 20 shikoyat:</b>\n"]
+    for r in rows:
+        ts = (r["created_at"] or "")[:16]
+        name = esc(r["target_name"] or "—")
+        lines.append(
+            f"#{r['id']} | {ts} | <b>{name}</b> (<code>{r['to_user_id']}</code>) "
+            f"— {esc(r['reason'] or '—')}"
+        )
+    lines.append("\nXabarlarni ko'rish: <code>/evidence &lt;report_id&gt;</code>")
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("violations"))
+async def cmd_violations(message: Message, config: Config) -> None:
+    """/violations <user_id> — foydalanuvchining qoidabuzarliklari tarixi."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(
+            "📋 <code>/violations &lt;user_id&gt;</code>"
+        )
+        return
+    user_id = int(parts[1])
+    from database.violations import get_user_violations, REASON_LABELS
+    items = await get_user_violations(user_id, limit=30)
+    if not items:
+        await message.answer(f"✅ #{user_id} qoidabuzarliklari yo'q.")
+        return
+    lines = [f"<b>⚠️ #{user_id} qoidabuzarliklari ({len(items)})</b>\n"]
+    for v in items:
+        label = REASON_LABELS.get(v["reason"], v["reason"])
+        ts = (v["created_at"] or "")[:16]
+        snippet = esc((v.get("message_text") or "")[:80])
+        lines.append(f"<i>{ts}</i> | <b>{label}</b>\n   <code>{snippet}</code>")
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("unmute"))
+async def cmd_unmute(message: Message, bot: Bot, config: Config) -> None:
+    """/unmute <user_id>"""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("📋 <code>/unmute &lt;user_id&gt;</code>")
+        return
+    user_id = int(parts[1])
+    await models.unmute(user_id)
+    await models.log_admin_action(message.from_user.id, "unmute", user_id)
+    await message.answer(f"✅ #{user_id} mute'dan ozod qilindi.")
+    try:
+        await bot.send_message(
+            user_id,
+            "✅ Sizning mute holatingiz olib tashlandi. Endi yana chat ishlatishingiz mumkin.",
+        )
+    except (TelegramForbiddenError, TelegramBadRequest):
+        pass
+
+
 @router.message(Command("unseedgirls"))
 async def cmd_unseed_girls(message: Message, config: Config) -> None:
     """5 ta qiz test anketalarini o'chirish."""
