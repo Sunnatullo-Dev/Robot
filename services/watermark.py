@@ -41,51 +41,67 @@ def _get_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def _add_watermark(image_bytes: bytes, viewer_id: int) -> bytes:
-    """Rasmga viewer ID watermark qo'shish va bytes qaytarish."""
+def _add_deterrent_watermark(image_bytes: bytes) -> bytes:
+    """Rasmga 'Tarqatish taqiqlanadi' deterrent watermark qo'shish.
+
+    Shaxsiy ma'lumot YO'Q — faqat ogohlantirish stamp'i.
+    Screenshot oluvchi har joydan ko'radi → tarqatishdan to'xtaydi.
+    """
     img = Image.open(io.BytesIO(image_bytes))
 
-    # RGB ga aylantirish (JPEG saqlash uchun)
     if img.mode != "RGB":
         img = img.convert("RGB")
 
-    # Juda katta rasmlarni qisqartirish
     if max(img.size) > _MAX_DIMENSION:
         img.thumbnail((_MAX_DIMENSION, _MAX_DIMENSION), Image.Resampling.LANCZOS)
 
     width, height = img.size
     draw = ImageDraw.Draw(img, "RGBA")
 
-    # Shrift o'lchami rasmga proporsional
-    font_size = max(int(min(width, height) * 0.035), 18)
-    font = _get_font(font_size)
+    # Asosiy watermark — pastki markazda
+    main_size = max(int(min(width, height) * 0.04), 20)
+    main_font = _get_font(main_size)
+    main_text = "TANISHUV BOT  -  ANONIM"
 
-    text = f"ID: {viewer_id}"
-
-    # Matn o'lchovi
-    bbox = draw.textbbox((0, 0), text, font=font)
+    bbox = draw.textbbox((0, 0), main_text, font=main_font)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
 
-    # Pozitsiya — pastki o'ng burchak, kichik padding bilan
-    padding = max(int(font_size * 0.5), 8)
-    x = width - text_w - padding * 2
+    padding = max(int(main_size * 0.5), 10)
+    x = (width - text_w) // 2
     y = height - text_h - padding * 2
 
-    # Yarim-shaffof qora fon (matn yaxshi ko'rinishi uchun)
-    bg_padding = max(int(font_size * 0.3), 4)
+    # Yarim-shaffof fon
+    bg_padding = max(int(main_size * 0.4), 6)
     draw.rectangle(
         [
             (x - bg_padding, y - bg_padding),
             (x + text_w + bg_padding, y + text_h + bg_padding),
         ],
-        fill=(0, 0, 0, 160),  # 160 / 255 ≈ 63% opacity
+        fill=(0, 0, 0, 140),
     )
+    draw.text((x, y), main_text, fill=(255, 255, 255, 255), font=main_font)
 
-    # Oq matn (RGBA bilan, lekin opaqe)
-    draw.text((x, y), text, fill=(255, 255, 255, 255), font=font)
+    # Diagonal "TARQATISH TAQIQLANADI" yozuvi (kuchli deterrent)
+    diag_size = max(int(min(width, height) * 0.06), 24)
+    diag_font = _get_font(diag_size)
+    diag_text = "TARQATISH TAQIQLANADI"
 
-    # JPEG bytes qaytarish
+    # Yangi transparent layer va aylantirish
+    diag_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    diag_draw = ImageDraw.Draw(diag_layer)
+    diag_bbox = diag_draw.textbbox((0, 0), diag_text, font=diag_font)
+    diag_w = diag_bbox[2] - diag_bbox[0]
+    diag_h = diag_bbox[3] - diag_bbox[1]
+    diag_draw.text(
+        ((width - diag_w) // 2, (height - diag_h) // 2),
+        diag_text,
+        fill=(255, 255, 255, 60),  # juda shaffof (kuchsiz ko'rinadi)
+        font=diag_font,
+    )
+    diag_layer = diag_layer.rotate(-25, resample=Image.Resampling.BICUBIC)
+    img.paste(diag_layer, (0, 0), diag_layer)
+
     output = io.BytesIO()
     img.save(output, format="JPEG", quality=_JPEG_QUALITY, optimize=True)
     output.seek(0)
@@ -93,20 +109,20 @@ def _add_watermark(image_bytes: bytes, viewer_id: int) -> bytes:
 
 
 async def get_watermarked_photo(
-    bot: Bot, file_id: str, viewer_id: int,
+    bot: Bot, file_id: str, viewer_id: int = 0,
 ) -> Optional[BufferedInputFile]:
-    """Telegram'dan rasmni yuklab, watermark qo'shib, BufferedInputFile qaytaradi.
+    """Telegram'dan rasmni yuklab, deterrent watermark qo'shib qaytaradi.
 
     Args:
         bot: aiogram Bot instance
         file_id: Asl rasm file_id
-        viewer_id: Kim ko'rayotgan — uning Telegram ID'si
+        viewer_id: parametr saqlangan (eski kod uchun), HOZIR ishlatilmaydi —
+                   anti-share watermark shaxsiy ma'lumot ko'rsatmaydi.
 
     Returns:
         BufferedInputFile yoki None (xato bo'lsa)
     """
     try:
-        # 1) Telegram'dan asl rasmni yuklab olish
         file = await bot.get_file(file_id)
         if not file.file_path:
             return None
@@ -115,14 +131,13 @@ async def get_watermarked_photo(
             return None
         original_bytes = buf.read()
 
-        # 2) Watermark qo'shish
-        watermarked = _add_watermark(original_bytes, viewer_id)
+        # Deterrent watermark — ID yo'q, faqat ogohlantirish
+        watermarked = _add_deterrent_watermark(original_bytes)
 
-        # 3) BufferedInputFile sifatida qaytarish
         return BufferedInputFile(
             watermarked,
-            filename=f"profile_{viewer_id}.jpg",
+            filename="profile.jpg",
         )
     except Exception as e:  # noqa: BLE001
-        logger.exception("Watermark failed for viewer=%s file_id=%s: %s", viewer_id, file_id, e)
+        logger.exception("Watermark failed for file_id=%s: %s", file_id, e)
         return None
