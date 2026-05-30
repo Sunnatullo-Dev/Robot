@@ -10,7 +10,8 @@ router = Router(name="matches")
 
 
 @router.message(Command("matches"))
-@router.message(F.text == "💌 Mosliklarim")
+@router.message(F.text == "💌 Mosliklar")
+@router.message(F.text == "💌 Mosliklarim")  # eski nom (backward compat)
 async def show_matches(message: Message) -> None:
     if message.from_user is None:
         return

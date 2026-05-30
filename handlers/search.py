@@ -47,7 +47,8 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
 
 
 @router.message(Command("search"))
-@router.message(F.text == "🔍 Anketalarni ko'rish")
+@router.message(F.text == "🔍 Qidirish")
+@router.message(F.text == "🔍 Anketalarni ko'rish")  # eski nom (backward compat)
 async def start_search(message: Message, state: FSMContext) -> None:
     if message.from_user is None:
         return
