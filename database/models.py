@@ -675,6 +675,39 @@ async def add_like(from_user: int, to_user: int, is_like: bool) -> bool:
         return True
 
 
+async def reset_dislikes(user_id: int) -> int:
+    """Foydalanuvchining barcha dislike yozuvlarini o'chirish.
+    Like'lar va match'lar saqlanib qoladi.
+    """
+    async with _conn() as db:
+        cur = await db.execute(
+            "DELETE FROM likes WHERE from_user_id = ? AND is_like = 0",
+            (user_id,),
+        )
+        await db.commit()
+        return cur.rowcount or 0
+
+
+async def reset_pending_likes(user_id: int) -> int:
+    """Match bo'lmagan like'larni o'chirish (qayta ko'rsatish uchun)."""
+    async with _conn() as db:
+        cur = await db.execute(
+            """
+            DELETE FROM likes
+            WHERE from_user_id = ?
+              AND is_like = 1
+              AND to_user_id NOT IN (
+                  SELECT user1_id FROM matches WHERE user2_id = ?
+                  UNION
+                  SELECT user2_id FROM matches WHERE user1_id = ?
+              )
+            """,
+            (user_id, user_id, user_id),
+        )
+        await db.commit()
+        return cur.rowcount or 0
+
+
 async def get_matches(user_id: int) -> list[dict[str, Any]]:
     async with _conn() as db:
         db.row_factory = aiosqlite.Row

@@ -19,15 +19,29 @@ logger = logging.getLogger(__name__)
 
 async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
     candidate = await models.get_next_candidate(user_id)
+
+    # ENDLESS FEED: agar yangi anketa qolmagan bo'lsa:
+    # 1) Dislike'larni reset → barcha "yoqmadi" bosilganlar qayta ko'rsatiladi
+    # 2) Hali ham bo'sh bo'lsa, match bo'lmagan like'larni ham reset
     if not candidate:
+        reset_count = await models.reset_dislikes(user_id)
+        if reset_count > 0:
+            candidate = await models.get_next_candidate(user_id)
+
+    if not candidate:
+        reset_count = await models.reset_pending_likes(user_id)
+        if reset_count > 0:
+            candidate = await models.get_next_candidate(user_id)
+
+    if not candidate:
+        # Haqiqatan ham hech kim yo'q (bo'sh DB)
         await state.update_data(current_candidate=None)
-        # Statistika
         matches_count = len(await models.get_matches(user_id))
         match_line = f"\n💞 Mosliklaringiz: <b>{matches_count}</b>" if matches_count else ""
         await message.answer(
-            "🎯 <b>Siz hammasini ko'rib chiqdingiz!</b>\n\n"
+            "📭 <b>Hozircha bo'shroq</b>\n\n"
             "Yangi a'zolar har kuni qo'shilib turadi — "
-            "ertaga qaytib keling 🌅" +
+            "biroz vaqtdan keyin qaytib keling 🌅" +
             match_line,
             reply_markup=reply.main_menu(),
         )
