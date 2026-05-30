@@ -43,15 +43,10 @@ async def _send_profile(message: Message, user_id: int) -> None:
 
 
 @router.message(Command("profile"))
-@router.message(F.text == "👤 Mening anketam")
+@router.message(F.text == "👤 Profil")
+@router.message(F.text == "👤 Mening anketam")  # eski tugma uchun ham ishlaydi
+@router.message(F.text == "⚙️ Sozlamalar")  # eski tugma uchun ham ishlaydi
 async def show_profile(message: Message) -> None:
-    if message.from_user is None:
-        return
-    await _send_profile(message, message.from_user.id)
-
-
-@router.message(F.text == "⚙️ Sozlamalar")
-async def settings(message: Message) -> None:
     if message.from_user is None:
         return
     await _send_profile(message, message.from_user.id)

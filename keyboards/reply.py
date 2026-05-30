@@ -4,9 +4,8 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemo
 def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🔍 Anketalarni ko'rish"), KeyboardButton(text="👤 Mening anketam")],
-            [KeyboardButton(text="💌 Mosliklarim"), KeyboardButton(text="⚙️ Sozlamalar")],
-            [KeyboardButton(text="❓ Yordam")],
+            [KeyboardButton(text="🔍 Qidirish"), KeyboardButton(text="👤 Profil")],
+            [KeyboardButton(text="💌 Mosliklar"), KeyboardButton(text="❓ Yordam")],
         ],
         resize_keyboard=True,
     )

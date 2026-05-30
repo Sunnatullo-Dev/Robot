@@ -25,10 +25,14 @@ async def reg_cancel(message: Message, state: FSMContext) -> None:
 async def reg_name(message: Message, state: FSMContext) -> None:
     name = (message.text or "").strip()
     if len(name) < 2 or len(name) > 30:
-        await message.answer("❗️ Ism 2 dan 30 belgigacha bo'lsin. Qayta kiriting:")
+        await message.answer(
+            "🤔 Iltimos, qisqaroq ism kiriting.\n"
+            "Ism kamida 2, ko'pi 30 ta belgi bo'lishi kerak.\n"
+            "Masalan: <i>Sardor, Aziza</i>"
+        )
         return
     await state.update_data(name=name)
-    await message.answer("🎂 Yoshingizni kiriting (14-99):")
+    await message.answer("<b>📝 Anketa: 2/7</b>\n\n🎂 Yoshingizni kiriting (masalan: 22):")
     await state.set_state(Registration.age)
 
 
@@ -37,10 +41,16 @@ async def reg_age(message: Message, state: FSMContext) -> None:
     text = message.text or ""
     age = parse_age(text)
     if age is None:
-        await message.answer("❗️ Iltimos, 14 dan 99 gacha bo'lgan son kiriting:")
+        await message.answer(
+            "🤔 Iltimos faqat raqam kiriting.\n"
+            "Yoshingiz 14 dan 99 gacha bo'lishi kerak."
+        )
         return
     await state.update_data(age=age)
-    await message.answer("⚧ Jinsingizni tanlang:", reply_markup=reply.gender_kb())
+    await message.answer(
+        "<b>📝 Anketa: 3/7</b>\n\n⚧ Jinsingizni tanlang:",
+        reply_markup=reply.gender_kb(),
+    )
     await state.set_state(Registration.gender)
 
 
@@ -49,16 +59,16 @@ async def reg_gender(message: Message, state: FSMContext) -> None:
     text = message.text or ""
     if "Erkak" in text:
         gender = "M"
-        looking_for = "F"  # Erkaklar — ayollarni qidirishadi
+        looking_for = "F"
     elif "Ayol" in text:
         gender = "F"
-        looking_for = "M"  # Ayollar — erkaklarni qidirishadi
+        looking_for = "M"
     else:
-        await message.answer("❗️ Tugmalardan birini tanlang.")
+        await message.answer("🤔 Iltimos pastdagi tugmalardan birini tanlang.")
         return
     await state.update_data(gender=gender, looking_for=looking_for)
     await message.answer(
-        "🏙 <b>Viloyatingizni tanlang:</b>",
+        "<b>📝 Anketa: 4/7</b>\n\n🏙 <b>Viloyatingizni tanlang:</b>",
         reply_markup=inline.regions_kb("reg"),
     )
     await state.set_state(Registration.city)
@@ -115,10 +125,11 @@ async def reg_city_pick(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer(f"✓ {district}")
     await call.message.edit_text(f"🏙 Tanlandi: <b>{city}</b>")  # type: ignore[union-attr]
     await call.message.answer(  # type: ignore[union-attr]
-        "📍 <b>Lokatsiyangizni yuboring</b> (ixtiyoriy)\n\n"
+        "<b>📝 Anketa: 5/7</b>\n\n"
+        "📍 <b>Lokatsiyangizni yuboring</b> <i>(ixtiyoriy)</i>\n\n"
         "Bu yaqin atrofdagi odamlarni topishga yordam beradi.\n"
-        "Telefondan: tugmani bosing → ruxsat bering → joriy joylashuv yuboriladi.\n\n"
-        "Agar xohlamasangiz «O'tkazib yuborish» bosing.",
+        "Telefon: tugmani bosing → ruxsat bering → joriy joylashuv yuboriladi.\n\n"
+        "Xohlamasangiz <b>⏭ O'tkazib yuborish</b> bosing.",
         reply_markup=reply.location_kb(),
     )
     await state.set_state(Registration.location)
@@ -134,7 +145,9 @@ async def reg_location(message: Message, state: FSMContext) -> None:
     )
     await message.answer("✅ Lokatsiya saqlandi.", reply_markup=reply.remove)
     await message.answer(
-        "💬 O'zingiz haqingizda qisqacha yozing (yoki o'tkazib yuboring):",
+        "<b>📝 Anketa: 6/7</b>\n\n"
+        "💬 O'zingiz haqingizda qisqacha yozing <i>(ixtiyoriy)</i>\n"
+        "Masalan: <i>Sport bilan shug'ullanaman, kitob o'qishni yoqtiraman</i>",
         reply_markup=reply.skip_kb(),
     )
     await state.set_state(Registration.bio)
@@ -144,7 +157,9 @@ async def reg_location(message: Message, state: FSMContext) -> None:
 async def reg_skip_location(message: Message, state: FSMContext) -> None:
     await state.update_data(latitude=None, longitude=None)
     await message.answer(
-        "💬 O'zingiz haqingizda qisqacha yozing (yoki o'tkazib yuboring):",
+        "<b>📝 Anketa: 6/7</b>\n\n"
+        "💬 O'zingiz haqingizda qisqacha yozing <i>(ixtiyoriy)</i>\n"
+        "Masalan: <i>Sport bilan shug'ullanaman, kitob o'qishni yoqtiraman</i>",
         reply_markup=reply.skip_kb(),
     )
     await state.set_state(Registration.bio)
@@ -156,7 +171,9 @@ async def reg_bio(message: Message, state: FSMContext) -> None:
     bio = "" if text == "⏭ O'tkazib yuborish" else text[:300]
     await state.update_data(bio=bio)
     await message.answer(
-        "📷 Endi o'z rasmingizni yuboring (1 dona):",
+        "<b>📝 Anketa: 7/7 — oxirgi qadam!</b>\n\n"
+        "📷 Endi o'z rasmingizni yuboring.\n"
+        "Yaxshi rasm — yaxshi mosliklar kafolati! 😊",
         reply_markup=reply.cancel_kb(),
     )
     await state.set_state(Registration.photo)
@@ -209,8 +226,13 @@ async def reg_confirm(message: Message, state: FSMContext) -> None:
     )
     await state.clear()
     await message.answer(
-        "🎉 Tabriklaymiz! Anketangiz tayyor.\n\n"
-        "Endi <b>🔍 Anketalarni ko'rish</b> tugmasini bosib, yangi do'stlar topishingiz mumkin.",
+        "🎉 <b>Anketangiz tayyor!</b>\n\n"
+        "📌 <b>Kichik maslahatlar:</b>\n"
+        "• ❤️ — yoqsa\n"
+        "• 👎 — yoqmasa (anonim, hech kim bilmaydi)\n"
+        "• Ikki tomon ham ❤️ bossa — mos kelasiz 💞\n"
+        "• Bot orqali anonim yozishasiz — raqamingiz ko'rinmaydi\n\n"
+        "🚀 Boshlash uchun pastdagi <b>🔍 Qidirish</b> tugmasini bosing.",
         reply_markup=reply.main_menu(),
     )
 

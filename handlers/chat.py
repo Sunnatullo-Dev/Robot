@@ -135,11 +135,18 @@ async def report_cancel(call: CallbackQuery, state: FSMContext) -> None:
 async def relay_text(message: Message, bot: Bot) -> None:
     if message.from_user is None or not message.text:
         return
-    # Bu menyu tugmalari emasligini tekshiramiz
+    # Bu menyu tugmalari emasligini tekshiramiz (eski va yangi nomlar)
     menu_buttons = {
+        # Yangi (V2)
+        "🔍 Qidirish", "👤 Profil", "💌 Mosliklar", "❓ Yordam",
+        # Eski (backward compat)
         "🔍 Anketalarni ko'rish", "👤 Mening anketam", "💌 Mosliklarim",
-        "⚙️ Sozlamalar", "❓ Yordam", "❤️ Yoqdi", "👎 Yoqmadi",
-        "🚫 Shikoyat", "🏠 Asosiy menyu", "🔚 Suhbatni tugatish",
+        "⚙️ Sozlamalar",
+        # Search
+        "❤️ Yoqdi", "👎 Yoqmadi", "🚫 Shikoyat", "🏠 Asosiy menyu",
+        # Chat
+        "🔚 Suhbatni tugatish",
+        # Registration / edit
         "❌ Bekor qilish", "✅ Ha, to'g'ri", "🔄 Qayta to'ldirish",
         "⏭ O'tkazib yuborish", "🗑 Bo'sh qoldirish",
         "👨 Erkak", "👩 Ayol", "🌈 Farqi yo'q",

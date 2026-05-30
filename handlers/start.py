@@ -12,26 +12,48 @@ router = Router(name="start")
 
 WELCOME_TEXT = (
     "👋 Salom, <b>{name}</b>!\n\n"
-    "Bu yerda yangi do'stlar topishingiz, suhbatlashishingiz va "
-    "balki haqiqiy munosabatlar boshlashingiz mumkin.\n\n"
-    "🔒 Sizning ma'lumotlaringiz xavfsiz. Tomonlar bir-birini "
-    "<b>like</b> bosgandagina ulanish ochiladi.\n\n"
-    "Boshlash uchun anketa yarataylik."
+    "Bu yerda yangi do'stlar va, balki, hayotingizning sherigini ham "
+    "topishingiz mumkin.\n\n"
+    "<b>✨ Qanday ishlaydi:</b>\n"
+    "1️⃣ Anketa to'ldirasiz\n"
+    "2️⃣ Boshqalarni ko'rasiz\n"
+    "3️⃣ Yoqqanlariga ❤️ bosasiz\n"
+    "4️⃣ Mos kelsangiz — anonim yozishasiz\n\n"
+    "🔒 Sizning ma'lumotlaringiz xavfsiz. Telefon raqamingizni "
+    "hech kim ko'ra olmaydi.\n\n"
+    "Boshlaymizmi? ⬇️"
+)
+
+WELCOME_BACK_TEXT = (
+    "👋 Xush kelibsiz, <b>{name}</b>!\n\n"
+    "Pastdagi tugmalardan birini tanlang:"
+)
+
+ONBOARDING_TIP = (
+    "🎉 <b>Anketangiz tayyor!</b>\n\n"
+    "📌 <b>Kichik maslahatlar:</b>\n"
+    "• ❤️ — yoqsa\n"
+    "• 👎 — yoqmasa (anonim, hech kim bilmaydi)\n"
+    "• Ikki tomon ham ❤️ bossa — mos kelasiz 💞\n"
+    "• Anonim yozishasiz — raqamingiz hech kimga bermaydi\n\n"
+    "🚀 Boshlash uchun pastdagi <b>🔍 Qidirish</b> tugmasini bosing."
 )
 
 HELP_TEXT = (
-    "<b>📖 Yordam</b>\n\n"
-    "🔍 <b>Anketalarni ko'rish</b> — yangi odamlarni topish\n"
-    "👤 <b>Mening anketam</b> — o'z anketangizni ko'rish/tahrirlash\n"
-    "💌 <b>Mosliklarim</b> — match bo'lganlar bilan suhbat\n"
-    "⚙️ <b>Sozlamalar</b> — anketani o'chirish/yangilash\n\n"
-    "<b>Buyruqlar:</b>\n"
+    "<b>📖 Qisqacha qo'llanma</b>\n\n"
+    "<b>🔍 QIDIRISH</b>\n"
+    "Anketalarni ko'rasiz va <b>❤️</b> yoki <b>👎</b> bosasiz\n\n"
+    "<b>💞 MATCH</b>\n"
+    "Ikki tomon ❤️ bossa, sizlar mos kelasiz va "
+    "anonim suhbat boshlash mumkin\n\n"
+    "<b>👤 PROFIL</b>\n"
+    "Ism, yosh, shahar, rasm va boshqalarni o'zgartirish\n\n"
+    "<b>📋 Buyruqlar:</b>\n"
     "/start — botni qayta ishga tushirish\n"
-    "/profile — o'z anketam\n"
-    "/search — qidirishni boshlash\n"
+    "/search — qidirish\n"
+    "/profile — mening anketam\n"
     "/matches — mosliklarim\n"
-    "/cancel — joriy amalni bekor qilish\n"
-    "/help — yordam\n\n"
+    "/cancel — joriy amalni bekor qilish\n\n"
     "❗️ Qoidalarni buzgan foydalanuvchilar bloklanadi."
 )
 
@@ -52,7 +74,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     profile = await models.get_user(user.id)
     if profile and profile.get("photo_id"):
         await message.answer(
-            f"Xush kelibsiz, <b>{profile['name']}</b>!",
+            WELCOME_BACK_TEXT.format(name=profile["name"]),
             reply_markup=reply.main_menu(),
         )
         return
@@ -61,7 +83,10 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         WELCOME_TEXT.format(name=user.first_name or "do'stim"),
         reply_markup=reply.remove,
     )
-    await message.answer("📝 Ismingizni kiriting:", reply_markup=reply.cancel_kb())
+    await message.answer(
+        "<b>📝 Anketa: 1/7</b>\n\nIsmingizni kiriting:",
+        reply_markup=reply.cancel_kb(),
+    )
     await state.set_state(Registration.name)
 
 

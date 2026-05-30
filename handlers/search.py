@@ -19,9 +19,14 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
     candidate = await models.get_next_candidate(user_id)
     if not candidate:
         await state.update_data(current_candidate=None)
+        # Statistika
+        matches_count = len(await models.get_matches(user_id))
+        match_line = f"\n💞 Mosliklaringiz: <b>{matches_count}</b>" if matches_count else ""
         await message.answer(
-            "🙁 Hozircha mos anketalar tugadi.\n"
-            "Keyinroq qaytib kelishingiz mumkin — yangi a'zolar qo'shilib turadi.",
+            "🎯 <b>Siz hammasini ko'rib chiqdingiz!</b>\n\n"
+            "Yangi a'zolar har kuni qo'shilib turadi — "
+            "ertaga qaytib keling 🌅" +
+            match_line,
             reply_markup=reply.main_menu(),
         )
         return
@@ -72,17 +77,17 @@ async def like(message: Message, state: FSMContext, bot: Bot) -> None:
 
         await message.answer(
             f"💞 <b>Mos keldi!</b>\n\n"
-            f"{t_name} ham sizni yoqtirdi.\n"
-            f"Username: {t_uname}\n\n"
-            f"Suhbat boshlash uchun <b>💌 Mosliklarim</b> bo'limiga o'ting.",
+            f"<b>{t_name}</b> ham sizni yoqtirdi 🎉\n"
+            f"Username: {t_uname}",
+            reply_markup=inline.match_actions_kb(target),
         )
         try:
             await bot.send_message(
                 target,
                 f"💞 <b>Mos keldi!</b>\n\n"
-                f"{my_name} sizni yoqtirdi.\n"
-                f"Username: {my_uname}\n\n"
-                f"Suhbat boshlash uchun <b>💌 Mosliklarim</b> bo'limiga o'ting.",
+                f"<b>{my_name}</b> sizni yoqtirdi 🎉\n"
+                f"Username: {my_uname}",
+                reply_markup=inline.match_actions_kb(message.from_user.id),
             )
         except (TelegramForbiddenError, TelegramBadRequest) as e:
             logger.info("Match notify failed for %s: %s", target, e)
