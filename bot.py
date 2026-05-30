@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 
 from aiogram import Bot, Dispatcher, Router
@@ -8,6 +9,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, ErrorEvent, Message
+from aiohttp import web
 
 from config import load_config
 from database import models
@@ -60,6 +62,27 @@ async def _on_error(event: ErrorEvent) -> None:
             pass
 
 
+async def _start_health_server(port: int) -> None:
+    """Render.com Web Service uchun oddiy HTTP server.
+
+    Render port'da javob beradigan server kutadi. Background Worker'da
+    kerak emas, lekin Web Service'da zarur. PORT environment variable
+    bo'lmasa, server umuman ishga tushmaydi.
+    """
+    async def health(_request: web.Request) -> web.Response:
+        return web.json_response({"status": "ok", "bot": "tanishuv-bot"})
+
+    app = web.Application()
+    app.router.add_get("/", health)
+    app.router.add_get("/health", health)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logging.info("Health server listening on 0.0.0.0:%s", port)
+
+
 async def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -104,6 +127,13 @@ async def main() -> None:
     )
 
     await bot.delete_webhook(drop_pending_updates=True)
+
+    # Render.com Web Service'da PORT env var bo'ladi — health server ishga tushiramiz.
+    # Background Worker'da PORT bo'lmaydi — faqat polling.
+    port_str = os.getenv("PORT", "").strip()
+    if port_str.isdigit():
+        await _start_health_server(int(port_str))
+
     logging.info("Bot ishga tushdi")
     await dp.start_polling(bot)
 
