@@ -191,6 +191,11 @@ async def init_db(path: str) -> None:
             "min_age": "14",
             "daily_likes_limit": "0",  # 0 = cheksiz
             "flood_limit": "0",  # 0 = default throttling
+            # Premium narxi va karta — admin paneldan tahrirlanadi
+            "premium_price": "9 999 so'm",
+            "premium_card": "5614 6847 0909 0318",
+            "premium_days": "30",
+            "premium_card_holder": "Tanishuv Bot",  # karta egasining ismi
         }
         for k, v in defaults.items():
             await db.execute(

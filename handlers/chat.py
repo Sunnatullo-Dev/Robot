@@ -150,7 +150,7 @@ async def relay_text(message: Message, bot: Bot) -> None:
         "⚙️ Sozlamalar",
         # Search
         "❤️ Yoqdi", "👎 Yoqmadi", "🚫 Shikoyat",
-        "🏡 Bosh sahifa", "🏠 Asosiy menyu",
+        "🔙 Bosh sahifa", "🏡 Bosh sahifa", "🏠 Asosiy menyu",
         # Chat
         "🔚 Suhbatni tugatish",
         # Registration / edit

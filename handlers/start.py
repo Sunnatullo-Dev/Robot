@@ -72,7 +72,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         return
 
     profile = await models.get_user(user.id)
-    if profile and profile.get("photo_id"):
+    # Anketa o'chirilgan (is_active=0) bo'lsa, yangi anketa yaratamiz
+    if profile and profile.get("photo_id") and profile.get("is_active"):
         await message.answer(
             WELCOME_BACK_TEXT.format(name=profile["name"]),
             reply_markup=reply.main_menu(),
@@ -96,11 +97,12 @@ async def cmd_help(message: Message) -> None:
     await message.answer(HELP_TEXT, reply_markup=reply.main_menu())
 
 
-@router.message(F.text == "🏡 Bosh sahifa")
-@router.message(F.text == "🏠 Asosiy menyu")  # eski matn (backward compat)
+@router.message(F.text == "🔙 Bosh sahifa")
+@router.message(F.text == "🏡 Bosh sahifa")  # eski matn
+@router.message(F.text == "🏠 Asosiy menyu")  # juda eski matn
 async def to_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("🏡 Bosh sahifa", reply_markup=reply.main_menu())
+    await message.answer("🔙 Bosh sahifa", reply_markup=reply.main_menu())
 
 
 @router.message(Command("cancel"))

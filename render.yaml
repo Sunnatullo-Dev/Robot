@@ -1,0 +1,36 @@
+# Render.com — Background Worker config
+# https://render.com/docs/blueprint-spec
+#
+# Foydalanish:
+# 1. Render.com'ga GitHub'ni ulang
+# 2. Repository tanlang
+# 3. Render bu fayldan avto sozlanadi
+# 4. Environment Variables ni qo'l bilan kiriting (BOT_TOKEN, ADMIN_IDS)
+
+services:
+  - type: worker
+    name: tanishuv-bot
+    runtime: python
+    plan: starter  # $7/oy — 24/7 ishlaydi, sleep yo'q
+    region: frankfurt  # Telegram bilan eng yaqin EU regioni
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    autoDeploy: true  # GitHub push → avtomatik deploy
+    envVars:
+      - key: BOT_TOKEN
+        sync: false  # Render UI'da qo'l bilan kiritiladi (mahfiy)
+      - key: ADMIN_IDS
+        sync: false
+      - key: DB_PATH
+        value: /opt/render/project/src/data/tanishuv.db
+      - key: CHANNEL_USERNAME
+        value: "@your_channel"
+      - key: REQUIRE_SUBSCRIPTION
+        value: "false"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+# Disk — DB faylini saqlash uchun persistent disk
+# Render Starter plan'da 1 GB persistent disk bepul kelishi mumkin
+# Aks holda DB qayta deploy'da yo'qoladi. Buni Render Dashboard'dan
+# qo'shing: Settings → Disks → New Disk (mount path: /opt/render/project/src/data)

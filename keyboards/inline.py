@@ -146,10 +146,11 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="adm:users"),
              InlineKeyboardButton(text="⚠️ Shikoyatlar", callback_data="adm:reports")],
             [InlineKeyboardButton(text="📢 Broadcast", callback_data="adm:broadcast_menu"),
-             InlineKeyboardButton(text="🤖 Sozlamalar", callback_data="adm:settings")],
-            [InlineKeyboardButton(text="🧪 Test tizimi", callback_data="adm:devtools"),
-             InlineKeyboardButton(text="📂 Loglar", callback_data="adm:logs")],
-            [InlineKeyboardButton(text="⚙️ Server holati", callback_data="adm:server")],
+             InlineKeyboardButton(text="💎 Premium narx", callback_data="adm:premium_set")],
+            [InlineKeyboardButton(text="🤖 Sozlamalar", callback_data="adm:settings"),
+             InlineKeyboardButton(text="🧪 Test tizimi", callback_data="adm:devtools")],
+            [InlineKeyboardButton(text="📂 Loglar", callback_data="adm:logs"),
+             InlineKeyboardButton(text="⚙️ Server holati", callback_data="adm:server")],
         ]
     )
 
@@ -246,6 +247,30 @@ def admin_settings_kb(settings: dict[str, str]) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(
                 text=f"❤️ Kunlik like cheklovi: {settings.get('daily_likes_limit', '0') or 'cheksiz'}",
                 callback_data="adm:set_edit:daily_likes_limit",
+            )],
+            [InlineKeyboardButton(text="« Orqaga", callback_data="adm:back")],
+        ]
+    )
+
+
+def admin_premium_settings_kb(price: str, card: str, days: str, holder: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"💰 Narxi: {price}",
+                callback_data="adm:set_edit:premium_price",
+            )],
+            [InlineKeyboardButton(
+                text=f"💳 Karta: {card}",
+                callback_data="adm:set_edit:premium_card",
+            )],
+            [InlineKeyboardButton(
+                text=f"👤 Karta egasi: {holder or '(yo''q)'}",
+                callback_data="adm:set_edit:premium_card_holder",
+            )],
+            [InlineKeyboardButton(
+                text=f"📅 Premium muddati: {days} kun",
+                callback_data="adm:set_edit:premium_days",
             )],
             [InlineKeyboardButton(text="« Orqaga", callback_data="adm:back")],
         ]

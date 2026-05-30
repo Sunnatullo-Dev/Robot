@@ -24,7 +24,22 @@ router = Router(name="premium")
 logger = logging.getLogger(__name__)
 
 
-def _paywall_text(config: Config) -> str:
+async def _get_premium_settings() -> tuple[str, str, int, str]:
+    """DB'dan premium sozlamalarni o'qish (admin tahrirlashi mumkin)."""
+    price = await models.get_setting("premium_price", "9 999 so'm")
+    card = await models.get_setting("premium_card", "5614 6847 0909 0318")
+    days_str = await models.get_setting("premium_days", "30")
+    holder = await models.get_setting("premium_card_holder", "")
+    try:
+        days = int(days_str)
+    except ValueError:
+        days = 30
+    return price, card, days, holder
+
+
+async def _paywall_text(config: Config) -> str:
+    price, card, days, holder = await _get_premium_settings()
+    holder_line = f"\n👤 Karta egasi: <b>{esc(holder)}</b>" if holder else ""
     return (
         "🔒 <b>Premium kerak</b>\n\n"
         "Bu xizmat istalgan foydalanuvchining Telegram lichkasiga "
@@ -34,8 +49,8 @@ def _paywall_text(config: Config) -> str:
         "• Anketada 💎 belgisi (boshqalar sizni ko'radi)\n"
         "• Maxsus broadcast'larni olish\n"
         "• Yangi imkoniyatlar (kelajakda)\n\n"
-        f"💰 <b>Narxi: {esc(config.premium_price)} / {config.premium_days} kun</b>\n"
-        f"💳 Karta: <code>{esc(config.premium_card)}</code>\n\n"
+        f"💰 <b>Narxi: {esc(price)} / {days} kun</b>\n"
+        f"💳 Karta: <code>{esc(card)}</code>{holder_line}\n\n"
         "📸 To'lovni amalga oshirgach, chekni quyidagi tugma orqali yuboring:"
     )
 
@@ -74,7 +89,7 @@ async def dm_request(call: CallbackQuery, config: Config) -> None:
     # Premium yo'q — paywall
     await call.answer()
     await call.message.answer(  # type: ignore[union-attr]
-        _paywall_text(config),
+        await _paywall_text(config),
         reply_markup=inline.premium_paywall_kb(),
     )
 
@@ -122,16 +137,19 @@ async def prem_paid_receipt(
     user = message.from_user
     uname = f"@{user.username}" if user.username else "—"
 
+    # DB'dan joriy premium sozlamalarni o'qish
+    price, _card, days, _holder = await _get_premium_settings()
+
     # Adminlarga yuborish
     notify_caption = (
         f"💰 <b>Premium so'rov</b>\n\n"
         f"Foydalanuvchi: <code>{user.id}</code>\n"
         f"Ism: {esc(user.first_name or '')} {esc(user.last_name or '')}\n"
         f"Username: {esc(uname)}\n\n"
-        f"Narxi: <b>{esc(config.premium_price)} / {config.premium_days} kun</b>"
+        f"Narxi: <b>{esc(price)} / {days} kun</b>"
     )
 
-    approval_kb = inline.premium_approval_kb(user.id, config.premium_days)
+    approval_kb = inline.premium_approval_kb(user.id, days)
 
     sent_to = 0
     for admin_id in config.admin_ids:
@@ -209,6 +227,6 @@ async def cmd_premium_status(message: Message, config: Config) -> None:
         )
     else:
         await message.answer(
-            _paywall_text(config),
+            await _paywall_text(config),
             reply_markup=inline.premium_paywall_kb(),
         )

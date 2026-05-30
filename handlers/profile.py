@@ -33,7 +33,15 @@ async def _send_profile(message: Message, user_id: int) -> None:
     user = await models.get_user(user_id)
     if not user or not user.get("photo_id"):
         await message.answer(
-            "Sizda hali anketa yo'q. /start buyrug'i orqali yarating.",
+            "📭 Sizda hali anketa yo'q.\n\nYaratish uchun /start bosing.",
+            reply_markup=reply.main_menu(),
+        )
+        return
+    # Anketa o'chirilgan (is_active=0) bo'lsa, qayta tiklash imkonini taklif qilamiz
+    if not user.get("is_active"):
+        await message.answer(
+            "🗑 <b>Anketangiz o'chirilgan</b>\n\n"
+            "Yangi anketa yaratish uchun /start bosing.",
             reply_markup=reply.main_menu(),
         )
         return

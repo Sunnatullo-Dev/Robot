@@ -567,15 +567,25 @@ async def adm_settings_edit_save(
     if message.from_user is None or not _is_admin(message.from_user.id, config):
         return
     text = (message.text or "").strip()
-    if not text.isdigit():
-        await message.answer("❗️ Faqat raqam yuboring.")
+    if not text:
+        await message.answer("❗️ Bo'sh qoldirib bo'lmaydi.")
         return
     data = await state.get_data()
     key = data.get("setting_key", "")
+
+    # Raqamli sozlamalar — faqat raqam qabul qilamiz
+    numeric_keys = {
+        "auto_ban_threshold", "min_age", "daily_likes_limit",
+        "flood_limit", "premium_days",
+    }
+    if key in numeric_keys and not text.isdigit():
+        await message.answer("❗️ Bu sozlama uchun faqat raqam yuboring.")
+        return
+
     await models.set_setting(key, text)
     await models.log_admin_action(message.from_user.id, "setting_edit", details=f"{key}={text}")
     await state.clear()
-    await message.answer(f"✅ <b>{key}</b> = <code>{text}</code>", reply_markup=reply.main_menu())
+    await message.answer(f"✅ <b>{key}</b> = <code>{esc(text)}</code>", reply_markup=reply.main_menu())
 
 
 # ============ 🧪 DEV TOOLS ============
@@ -886,6 +896,33 @@ async def cmd_unseed(message: Message, config: Config) -> None:
         f"🗑 {deleted} ta test anketa o'chirildi.",
         reply_markup=reply.main_menu(),
     )
+
+
+# ============ 💎 PREMIUM SOZLAMALARI (admin paneldan) ============
+
+@router.callback_query(F.data == "adm:premium_set")
+async def adm_premium_settings(call: CallbackQuery, config: Config) -> None:
+    if call.from_user is None or not _is_admin(call.from_user.id, config):
+        await call.answer("Ruxsat yo'q", show_alert=True)
+        return
+    await call.answer()
+    price = await models.get_setting("premium_price", "9 999 so'm")
+    card = await models.get_setting("premium_card", "5614 6847 0909 0318")
+    days = await models.get_setting("premium_days", "30")
+    holder = await models.get_setting("premium_card_holder", "")
+    text = (
+        "<b>💎 Premium sozlamalari</b>\n\n"
+        f"💰 Joriy narxi: <b>{esc(price)}</b>\n"
+        f"💳 Joriy karta: <code>{esc(card)}</code>\n"
+        f"👤 Karta egasi: <b>{esc(holder) or '—'}</b>\n"
+        f"📅 Premium muddati: <b>{esc(days)} kun</b>\n\n"
+        f"Tahrirlash uchun mos tugmani bosing:"
+    )
+    kb = inline.admin_premium_settings_kb(price, card, days, holder)
+    try:
+        await call.message.edit_text(text, reply_markup=kb)  # type: ignore
+    except TelegramBadRequest:
+        await call.message.answer(text, reply_markup=kb)  # type: ignore
 
 
 # ============ 💎 PREMIUM TASDIQLASH (inline tugmalar) ============
