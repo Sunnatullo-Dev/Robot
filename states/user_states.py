@@ -36,5 +36,6 @@ class AdminFlow(StatesGroup):
     ban_user = State()
     unban_user = State()
     seed_photo = State()
+    seed_girls_photos = State()  # 5 ta rasmni ketma-ket yuborish
     user_search = State()
     setting_value = State()

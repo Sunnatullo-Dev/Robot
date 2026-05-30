@@ -35,6 +35,7 @@ from aiogram.types import (
 )
 
 from config import Config
+from data.test_girls import BASE_ID_GIRLS, TEST_GIRLS
 from data.test_users import BASE_ID, TEST_USERS
 from database import models
 from database.db import get_db_path
@@ -1211,3 +1212,117 @@ async def cmd_premiums(message: Message, config: Config) -> None:
         until = (u.get("premium_until") or "")[:10]
         lines.append(f"• <code>{u['user_id']}</code> {esc(u.get('name')) or '—'} {uname} — {until} gacha")
     await message.answer("\n".join(lines))
+
+
+# ============ 👧 5 TA QIZ TEST ANKETALARI ============
+
+@router.message(Command("seedgirls"))
+async def cmd_seed_girls_start(
+    message: Message, state: FSMContext, config: Config,
+) -> None:
+    """5 ta unique rasm bilan qiz anketalarini yaratish."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+
+    profiles_preview = "\n".join(
+        f"  {i+1}. {name}, {age} yosh — {city.split(',')[0]}"
+        for i, (name, age, _lf, city, _bio, _lat, _lng) in enumerate(TEST_GIRLS)
+    )
+    await state.set_state(AdminFlow.seed_girls_photos)
+    await state.update_data(girls_index=0, girls_photo_ids=[])
+    await message.answer(
+        f"👧 <b>5 ta qiz test anketalarini yaratish</b>\n\n"
+        f"Hozir <b>5 ta rasmni</b> ketma-ket yuboring:\n\n"
+        f"{profiles_preview}\n\n"
+        f"<b>1-rasmni yuboring</b> (Sevinch uchun):\n"
+        f"Bekor qilish: /cancel",
+        reply_markup=reply.cancel_kb(),
+    )
+
+
+@router.message(AdminFlow.seed_girls_photos, F.text == "❌ Bekor qilish")
+async def cmd_seed_girls_cancel(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Bekor qilindi.", reply_markup=reply.main_menu())
+
+
+@router.message(AdminFlow.seed_girls_photos, F.photo)
+async def cmd_seed_girls_photo(
+    message: Message, state: FSMContext, config: Config,
+) -> None:
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    if not message.photo:
+        return
+
+    data = await state.get_data()
+    idx: int = data.get("girls_index", 0)
+    photo_ids: list[str] = data.get("girls_photo_ids", [])
+
+    # Hozirgi rasmni file_id sifatida saqlaymiz
+    photo_ids.append(message.photo[-1].file_id)
+    idx += 1
+
+    # Hammasi yig'ilgan bo'lsa, anketalarni yaratamiz
+    if idx >= len(TEST_GIRLS):
+        created = 0
+        failed: list[str] = []
+        for i, (name, age, lf, city, bio, lat, lng) in enumerate(TEST_GIRLS):
+            user_id = BASE_ID_GIRLS + i + 1
+            try:
+                await models.upsert_seed_user(
+                    user_id=user_id,
+                    name=name,
+                    age=age,
+                    gender="F",
+                    looking_for=lf,
+                    city=city,
+                    bio=bio,
+                    photo_id=photo_ids[i],
+                    latitude=lat,
+                    longitude=lng,
+                )
+                created += 1
+            except Exception as e:  # noqa: BLE001
+                logger.exception("Seed girl %s failed: %s", name, e)
+                failed.append(f"{name}: {e}")
+
+        await models.log_admin_action(
+            message.from_user.id, "seed_girls", details=f"count={created}",
+        )
+        await state.clear()
+        text = f"✅ <b>{created} ta qiz anketasi yaratildi</b>\n\n"
+        if failed:
+            text += f"❗️ Muvaffaqiyatsiz: {len(failed)}\n" + "\n".join(failed[:5])
+        text += "\n\nO'chirish: /unseedgirls"
+        await message.answer(text, reply_markup=reply.main_menu())
+        return
+
+    # Hali ham rasm kerak — sonini saqlaymiz va keyingisini so'raymiz
+    await state.update_data(girls_index=idx, girls_photo_ids=photo_ids)
+    next_name = TEST_GIRLS[idx][0]
+    await message.answer(
+        f"✅ {idx}-rasm qabul qilindi.\n\n"
+        f"<b>{idx + 1}-rasmni yuboring</b> ({next_name} uchun):"
+    )
+
+
+@router.message(AdminFlow.seed_girls_photos)
+async def cmd_seed_girls_other(message: Message) -> None:
+    await message.answer("📸 Iltimos, rasm yuboring (matn yoki fayl emas).")
+
+
+@router.message(Command("unseedgirls"))
+async def cmd_unseed_girls(message: Message, config: Config) -> None:
+    """5 ta qiz test anketalarini o'chirish."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    # delete_seed_users ushbu BASE_ID dan boshlanadigan barcha userlarni o'chiradi
+    deleted = await models.delete_seed_users(BASE_ID_GIRLS)
+    await models.log_admin_action(
+        message.from_user.id, "unseed_girls", details=f"count={deleted}",
+    )
+    await message.answer(
+        f"🗑 {deleted} ta qiz test anketasi o'chirildi.",
+        reply_markup=reply.main_menu(),
+    )
