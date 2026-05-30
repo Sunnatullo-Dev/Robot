@@ -10,6 +10,7 @@ from database import models
 from database.logs import EventType
 from keyboards import inline, reply
 from services.logging_service import log_event
+from services.watermark import get_watermarked_photo
 from states.user_states import ReportFlow
 from utils.helpers import esc, format_profile
 
@@ -17,7 +18,7 @@ router = Router(name="search")
 logger = logging.getLogger(__name__)
 
 
-async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
+async def _show_next(message: Message, state: FSMContext, user_id: int, bot: Bot) -> None:
     candidate = await models.get_next_candidate(user_id)
 
     # ENDLESS FEED: agar yangi anketa qolmagan bo'lsa:
@@ -49,10 +50,18 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
 
     await state.update_data(current_candidate=candidate["user_id"])
     distance = candidate.pop("_distance", None)
+
+    # Watermark — viewer'ning ID'sini rasmga yozamiz
+    # Screenshot tarqalganda kim olganini aniqlash uchun
+    photo_to_send = candidate["photo_id"]  # fallback: asl file_id
+    wm = await get_watermarked_photo(bot, candidate["photo_id"], user_id)
+    if wm is not None:
+        photo_to_send = wm
+
     # Anketa rasmi ostida inline tugma "💌 Lichkaga o'tish"
     # protect_content=True — forward va save'ni bloklaydi
     await message.answer_photo(
-        photo=candidate["photo_id"],
+        photo=photo_to_send,
         caption=format_profile(candidate, distance_km=distance),
         reply_markup=inline.candidate_dm_kb(candidate["user_id"]),
         protect_content=True,
@@ -72,7 +81,7 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
 @router.message(Command("search"))
 @router.message(F.text == "🔍 Qidirish")
 @router.message(F.text == "🔍 Anketalarni ko'rish")  # eski nom (backward compat)
-async def start_search(message: Message, state: FSMContext) -> None:
+async def start_search(message: Message, state: FSMContext, bot: Bot) -> None:
     if message.from_user is None:
         return
     user = await models.get_user(message.from_user.id)
@@ -84,7 +93,7 @@ async def start_search(message: Message, state: FSMContext) -> None:
         return
     # Reply keyboardni o'rnatamiz (❤️ 👎 🚫 🏠) — keyingi photo'lar inline tugmali bo'ladi
     await message.answer("🔍 <b>Qidiruv boshlandi</b>", reply_markup=reply.search_kb())
-    await _show_next(message, state, message.from_user.id)
+    await _show_next(message, state, message.from_user.id, bot)
 
 
 @router.message(F.text == "❤️ Yoqdi")
@@ -94,7 +103,7 @@ async def like(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     target = data.get("current_candidate")
     if not target:
-        await _show_next(message, state, message.from_user.id)
+        await _show_next(message, state, message.from_user.id, bot)
         return
 
     is_match = await models.add_like(message.from_user.id, target, True)
@@ -127,11 +136,11 @@ async def like(message: Message, state: FSMContext, bot: Bot) -> None:
         except (TelegramForbiddenError, TelegramBadRequest) as e:
             logger.info("Match notify failed for %s: %s", target, e)
 
-    await _show_next(message, state, message.from_user.id)
+    await _show_next(message, state, message.from_user.id, bot)
 
 
 @router.message(F.text == "👎 Yoqmadi")
-async def dislike(message: Message, state: FSMContext) -> None:
+async def dislike(message: Message, state: FSMContext, bot: Bot) -> None:
     if message.from_user is None:
         return
     data = await state.get_data()
@@ -139,7 +148,7 @@ async def dislike(message: Message, state: FSMContext) -> None:
     if target:
         await models.add_like(message.from_user.id, target, False)
         await log_event(message.from_user.id, EventType.DISLIKE_SENT, {"to": target})
-    await _show_next(message, state, message.from_user.id)
+    await _show_next(message, state, message.from_user.id, bot)
 
 
 @router.message(F.text == "🚫 Shikoyat")
