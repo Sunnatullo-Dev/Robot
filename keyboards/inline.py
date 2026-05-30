@@ -142,6 +142,7 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📊 Dashboard", callback_data="adm:dashboard")],
+            [InlineKeyboardButton(text="🔍 Monitoring", callback_data="mon:menu")],
             [InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="adm:users"),
              InlineKeyboardButton(text="⚠️ Shikoyatlar", callback_data="adm:reports")],
             [InlineKeyboardButton(text="📢 Broadcast", callback_data="adm:broadcast_menu"),

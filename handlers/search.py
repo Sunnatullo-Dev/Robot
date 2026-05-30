@@ -7,7 +7,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from database import models
+from database.logs import EventType
 from keyboards import inline, reply
+from services.logging_service import log_event
 from states.user_states import ReportFlow
 from utils.helpers import esc, format_profile
 
@@ -76,10 +78,13 @@ async def like(message: Message, state: FSMContext, bot: Bot) -> None:
         return
 
     is_match = await models.add_like(message.from_user.id, target, True)
+    await log_event(message.from_user.id, EventType.LIKE_SENT, {"to": target})
     me = await models.get_user(message.from_user.id)
     target_user = await models.get_user(target)
 
     if is_match and me and target_user:
+        await log_event(message.from_user.id, EventType.MATCH_CREATED, {"with": target})
+        await log_event(target, EventType.MATCH_CREATED, {"with": message.from_user.id})
         my_uname = f"@{esc(me['username'])}" if me.get("username") else "—"
         t_uname = f"@{esc(target_user['username'])}" if target_user.get("username") else "—"
         my_name = esc(me["name"])
@@ -113,6 +118,7 @@ async def dislike(message: Message, state: FSMContext) -> None:
     target = data.get("current_candidate")
     if target:
         await models.add_like(message.from_user.id, target, False)
+        await log_event(message.from_user.id, EventType.DISLIKE_SENT, {"to": target})
     await _show_next(message, state, message.from_user.id)
 
 

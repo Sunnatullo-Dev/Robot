@@ -101,6 +101,57 @@ async def init_db(path: str) -> None:
                 added_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            -- ============ MONITORING SYSTEM V3 ============
+
+            -- Event logs: barcha foydalanuvchi amallari
+            CREATE TABLE IF NOT EXISTS logs (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                metadata   TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_logs_user_id
+                ON logs(user_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_logs_event_type
+                ON logs(event_type, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_logs_created_at
+                ON logs(created_at DESC);
+
+            -- Avtomatik alerts (shubhali foydalanuvchilar)
+            CREATE TABLE IF NOT EXISTS alerts (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                reason     TEXT NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'pending',
+                details    TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_alerts_status
+                ON alerts(status, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_alerts_user_id
+                ON alerts(user_id, status);
+
+            -- Shikoyat qilingan suhbat xabarlari (faqat report bo'lganda saqlanadi)
+            CREATE TABLE IF NOT EXISTS reported_messages (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_id    INTEGER NOT NULL,
+                sender_id    INTEGER NOT NULL,
+                message_type TEXT NOT NULL,
+                content      TEXT,
+                file_id      TEXT,
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_reported_messages_report
+                ON reported_messages(report_id);
+
+            -- admin_logs jadvalida yaxshilangan indeks
+            CREATE INDEX IF NOT EXISTS idx_admin_logs_target
+                ON admin_logs(target_id, created_at DESC);
+
             CREATE INDEX IF NOT EXISTS idx_admin_logs_admin
                 ON admin_logs(admin_id, created_at DESC);
 

@@ -7,7 +7,9 @@ from aiogram.types import CallbackQuery, Message
 
 from data.regions import get_district, get_region
 from database import models
+from database.logs import EventType
 from keyboards import inline, reply
+from services.logging_service import log_event
 from states.user_states import EditProfile
 from utils.helpers import format_profile, parse_age
 
@@ -64,6 +66,7 @@ async def edit_delete(call: CallbackQuery, state: FSMContext) -> None:
         return
     await call.answer("🗑 O'chirilmoqda...", show_alert=False)
     await models.update_field(call.from_user.id, "is_active", 0)
+    await log_event(call.from_user.id, EventType.PROFILE_DELETED)
     await state.clear()
     # Foydalanuvchining anketa rasmidagi tugmalarni olib tashlaymiz
     try:
@@ -181,6 +184,7 @@ async def edit_name(message: Message, state: FSMContext) -> None:
         await message.answer("❗️ Ism 2 dan 30 belgigacha bo'lsin.")
         return
     await models.update_field(message.from_user.id, "name", name)
+    await log_event(message.from_user.id, EventType.PROFILE_UPDATED, {"field": "name"})
     await state.clear()
     await message.answer("✅ Ism yangilandi.", reply_markup=reply.main_menu())
 
@@ -194,6 +198,7 @@ async def edit_age(message: Message, state: FSMContext) -> None:
         await message.answer("❗️ 14 dan 99 gacha son kiriting.")
         return
     await models.update_field(message.from_user.id, "age", age)
+    await log_event(message.from_user.id, EventType.PROFILE_UPDATED, {"field": "age"})
     await state.clear()
     await message.answer("✅ Yosh yangilandi.", reply_markup=reply.main_menu())
 
@@ -205,6 +210,7 @@ async def edit_bio(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
     bio = "" if text == "🗑 Bo'sh qoldirish" else text[:300]
     await models.update_field(message.from_user.id, "bio", bio)
+    await log_event(message.from_user.id, EventType.PROFILE_UPDATED, {"field": "bio"})
     await state.clear()
     await message.answer("✅ Bio yangilandi.", reply_markup=reply.main_menu())
 

@@ -6,7 +6,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from database import models
+from database.logs import EventType
 from keyboards import inline, reply
+from services.logging_service import log_event
 from states.user_states import ReportFlow
 from utils.helpers import esc
 
@@ -27,6 +29,7 @@ async def chat_start(call: CallbackQuery, bot: Bot) -> None:
         return
 
     await models.start_chat(call.from_user.id, partner_id, match_id)
+    await log_event(call.from_user.id, EventType.CHAT_STARTED, {"partner": partner_id})
     await call.answer()
 
     me = await models.get_user(call.from_user.id)
@@ -59,6 +62,7 @@ async def chat_stop(message: Message, bot: Bot) -> None:
     if message.from_user is None:
         return
     partner = await models.stop_chat(message.from_user.id)
+    await log_event(message.from_user.id, EventType.CHAT_ENDED, {"partner": partner})
     await message.answer("✅ Suhbat tugatildi.", reply_markup=reply.main_menu())
     if partner:
         try:
@@ -94,6 +98,8 @@ async def report_submit(call: CallbackQuery, state: FSMContext, bot: Bot) -> Non
     _, target_str, reason = call.data.split(":", 2)
     target = int(target_str)
     await models.add_report(call.from_user.id, target, reason)
+    # log_event'da user_id = report olgan odam (target), shunda alert qoidasi to'g'ri ishlaydi
+    await log_event(target, EventType.REPORT_CREATED, {"by": call.from_user.id, "reason": reason})
     await state.clear()
     await call.answer("Shikoyat qabul qilindi.", show_alert=True)
     await call.message.answer(  # type: ignore[union-attr]

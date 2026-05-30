@@ -38,7 +38,9 @@ from config import Config
 from data.test_users import BASE_ID, TEST_USERS
 from database import models
 from database.db import get_db_path
+from database.logs import EventType
 from keyboards import inline, reply
+from services.logging_service import log_event
 from states.user_states import AdminFlow
 from utils.helpers import esc
 
@@ -246,6 +248,7 @@ async def adm_user_action(call: CallbackQuery, config: Config, bot: Bot) -> None
         await models.set_banned(user_id, True)
         await models.resolve_reports(user_id)
         await models.log_admin_action(admin_id, "ban", user_id)
+        await log_event(user_id, EventType.USER_BANNED, {"by_admin": admin_id})
         await call.answer("✅ Bloklandi", show_alert=True)
         try:
             await bot.send_message(user_id, "🚫 Siz administrator tomonidan bloklandingiz.")
@@ -254,10 +257,12 @@ async def adm_user_action(call: CallbackQuery, config: Config, bot: Bot) -> None
     elif action == "unban":
         await models.set_banned(user_id, False)
         await models.log_admin_action(admin_id, "unban", user_id)
+        await log_event(user_id, EventType.USER_UNBANNED, {"by_admin": admin_id})
         await call.answer("✅ Blokdan chiqarildi", show_alert=True)
     elif action == "shadow":
         await models.set_shadow_banned(user_id, True)
         await models.log_admin_action(admin_id, "shadowban", user_id)
+        await log_event(user_id, EventType.USER_SHADOW_BANNED, {"by_admin": admin_id})
         await call.answer("✅ Shadowban qo'yildi", show_alert=True)
     elif action == "unshadow":
         await models.set_shadow_banned(user_id, False)
@@ -898,6 +903,7 @@ async def adm_prem_approve(call: CallbackQuery, bot: Bot, config: Config) -> Non
     await models.log_admin_action(
         call.from_user.id, "premium_approve", user_id, details=f"days={days}"
     )
+    await log_event(user_id, EventType.PREMIUM_GRANTED, {"days": days, "by_admin": call.from_user.id})
     await call.answer(f"✅ {days} kun premium berildi", show_alert=True)
 
     # Foydalanuvchiga xabar
@@ -1005,6 +1011,8 @@ async def cmd_setpremium(message: Message, bot: Bot, config: Config) -> None:
     await models.log_admin_action(
         message.from_user.id, "set_premium", target_id, details=f"days={days}"
     )
+    event = EventType.PREMIUM_REVOKED if days <= 0 else EventType.PREMIUM_GRANTED
+    await log_event(target_id, event, {"days": days, "by_admin": message.from_user.id})
 
     if days <= 0:
         await message.answer(f"✅ #{target_id} dan premium olib tashlandi.")

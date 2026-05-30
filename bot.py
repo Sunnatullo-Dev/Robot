@@ -14,6 +14,9 @@ from database import models
 from database.db import init_db
 from handlers import (
     admin,
+    admin_alerts,
+    admin_monitoring,
+    admin_timeline,
     chat,
     matches,
     premium,
@@ -92,6 +95,10 @@ async def main() -> None:
         matches.router,
         premium.router,  # MUHIM: chat.router'dan oldin (dm:, prem: callbacklar)
         chat.router,
+        # Admin Monitoring V3 — admin.router'dan oldin (mon:, alrt:, tl: callbacks)
+        admin_monitoring.router,
+        admin_alerts.router,
+        admin_timeline.router,
         admin.router,
         _build_fallback_router(),  # OXIRGI: eski tugmalar uchun
     )

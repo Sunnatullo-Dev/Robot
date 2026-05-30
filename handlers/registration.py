@@ -5,7 +5,9 @@ from aiogram.types import CallbackQuery, Message
 
 from data.regions import get_district, get_region
 from database import models
+from database.logs import EventType
 from keyboards import inline, reply
+from services.logging_service import log_event
 from states.user_states import Registration
 from utils.helpers import format_profile, parse_age
 
@@ -223,6 +225,11 @@ async def reg_confirm(message: Message, state: FSMContext) -> None:
         photo_id=data["photo_id"],
         latitude=data.get("latitude"),
         longitude=data.get("longitude"),
+    )
+    await log_event(
+        message.from_user.id,
+        EventType.USER_REGISTER,
+        metadata={"age": data["age"], "gender": data["gender"], "city": data["city"]},
     )
     await state.clear()
     await message.answer(
