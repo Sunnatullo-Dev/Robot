@@ -51,6 +51,7 @@ async def view_match(call: CallbackQuery) -> None:
         photo=partner["photo_id"],
         caption=caption,
         reply_markup=inline.match_actions_kb(partner_id),
+        protect_content=True,
     )
 
 

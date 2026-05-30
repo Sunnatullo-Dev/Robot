@@ -49,10 +49,15 @@ async def _send_profile(message: Message, user_id: int) -> None:
         photo=user["photo_id"],
         caption=f"<b>👤 Sizning anketangiz</b>\n\n{format_profile(user)}",
         reply_markup=inline.edit_profile_kb(),
+        protect_content=True,
     )
     if user.get("voice_id"):
         try:
-            await message.answer_voice(user["voice_id"], caption="🎤 Sizning ovozingiz")
+            await message.answer_voice(
+                user["voice_id"],
+                caption="🎤 Sizning ovozingiz",
+                protect_content=True,
+            )
         except Exception:
             pass
 

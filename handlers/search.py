@@ -50,15 +50,21 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
     await state.update_data(current_candidate=candidate["user_id"])
     distance = candidate.pop("_distance", None)
     # Anketa rasmi ostida inline tugma "💌 Lichkaga o'tish"
+    # protect_content=True — forward va save'ni bloklaydi
     await message.answer_photo(
         photo=candidate["photo_id"],
         caption=format_profile(candidate, distance_km=distance),
         reply_markup=inline.candidate_dm_kb(candidate["user_id"]),
+        protect_content=True,
     )
     # Ovozli bio bo'lsa, qo'shimcha xabar
     if candidate.get("voice_id"):
         try:
-            await message.answer_voice(candidate["voice_id"], caption="🎤 Ovozli salomlashish")
+            await message.answer_voice(
+                candidate["voice_id"],
+                caption="🎤 Ovozli salomlashish",
+                protect_content=True,
+            )
         except Exception:
             pass
 

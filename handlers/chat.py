@@ -173,7 +173,8 @@ async def relay_text(message: Message, bot: Bot) -> None:
         )
         return
     try:
-        await bot.send_message(partner, message.text)
+        # protect_content=True — partner xabarni forward yoki save qila olmaydi
+        await bot.send_message(partner, message.text, protect_content=True)
     except (TelegramForbiddenError, TelegramBadRequest) as e:
         logger.info("Relay text to %s failed: %s", partner, e)
         await message.answer("❗️ Partnerga xabar yetkazib bo'lmadi.")
@@ -187,7 +188,10 @@ async def relay_photo(message: Message, bot: Bot) -> None:
     if not partner:
         return
     try:
-        await bot.send_photo(partner, message.photo[-1].file_id, caption=message.caption)
+        await bot.send_photo(
+            partner, message.photo[-1].file_id,
+            caption=message.caption, protect_content=True,
+        )
     except (TelegramForbiddenError, TelegramBadRequest):
         await message.answer("❗️ Rasm yetkazilmadi.")
 
@@ -200,7 +204,7 @@ async def relay_voice(message: Message, bot: Bot) -> None:
     if not partner:
         return
     try:
-        await bot.send_voice(partner, message.voice.file_id)
+        await bot.send_voice(partner, message.voice.file_id, protect_content=True)
     except (TelegramForbiddenError, TelegramBadRequest):
         await message.answer("❗️ Ovozli xabar yetkazilmadi.")
 
@@ -213,7 +217,7 @@ async def relay_video_note(message: Message, bot: Bot) -> None:
     if not partner:
         return
     try:
-        await bot.send_video_note(partner, message.video_note.file_id)
+        await bot.send_video_note(partner, message.video_note.file_id, protect_content=True)
     except (TelegramForbiddenError, TelegramBadRequest):
         await message.answer("❗️ Video-xabar yetkazilmadi.")
 
@@ -226,6 +230,6 @@ async def relay_sticker(message: Message, bot: Bot) -> None:
     if not partner:
         return
     try:
-        await bot.send_sticker(partner, message.sticker.file_id)
+        await bot.send_sticker(partner, message.sticker.file_id, protect_content=True)
     except (TelegramForbiddenError, TelegramBadRequest):
         pass
