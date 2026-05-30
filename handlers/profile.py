@@ -57,21 +57,32 @@ async def show_profile(message: Message) -> None:
     await _send_profile(message, message.from_user.id)
 
 
+# Anketani o'chirish — alohida ishonchli handler (eng yuqori prioritet)
+@router.callback_query(F.data == "edit:delete")
+async def edit_delete(call: CallbackQuery, state: FSMContext) -> None:
+    if call.from_user is None:
+        return
+    await call.answer("🗑 O'chirilmoqda...", show_alert=False)
+    await models.update_field(call.from_user.id, "is_active", 0)
+    await state.clear()
+    # Foydalanuvchining anketa rasmidagi tugmalarni olib tashlaymiz
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    await call.message.answer(  # type: ignore[union-attr]
+        "🗑 <b>Anketangiz o'chirildi.</b>\n\n"
+        "Qayta yaratish uchun /start bosing.",
+        reply_markup=reply.remove,
+    )
+
+
 @router.callback_query(F.data.in_(_EDIT_TOP_COMMANDS))
 async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
     if call.data is None or call.from_user is None:
         return
     field = call.data.split(":", 1)[1]
     await call.answer()
-
-    if field == "delete":
-        await models.update_field(call.from_user.id, "is_active", 0)
-        await state.clear()
-        await call.message.answer(  # type: ignore[union-attr]
-            "🗑 Anketangiz o'chirildi. Qayta yaratish uchun /start bosing.",
-            reply_markup=reply.remove,
-        )
-        return
 
     if field == "city":
         await call.message.answer(  # type: ignore[union-attr]

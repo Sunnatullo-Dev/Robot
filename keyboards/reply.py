@@ -64,7 +64,7 @@ def search_kb() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="👎 Yoqmadi"),
                 KeyboardButton(text="🚫 Shikoyat"),
             ],
-            [KeyboardButton(text="🏠 Asosiy menyu")],
+            [KeyboardButton(text="🏡 Bosh sahifa")],
         ],
         resize_keyboard=True,
     )

@@ -143,7 +143,8 @@ async def relay_text(message: Message, bot: Bot) -> None:
         "🔍 Anketalarni ko'rish", "👤 Mening anketam", "💌 Mosliklarim",
         "⚙️ Sozlamalar",
         # Search
-        "❤️ Yoqdi", "👎 Yoqmadi", "🚫 Shikoyat", "🏠 Asosiy menyu",
+        "❤️ Yoqdi", "👎 Yoqmadi", "🚫 Shikoyat",
+        "🏡 Bosh sahifa", "🏠 Asosiy menyu",
         # Chat
         "🔚 Suhbatni tugatish",
         # Registration / edit

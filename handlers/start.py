@@ -96,10 +96,11 @@ async def cmd_help(message: Message) -> None:
     await message.answer(HELP_TEXT, reply_markup=reply.main_menu())
 
 
-@router.message(F.text == "🏠 Asosiy menyu")
+@router.message(F.text == "🏡 Bosh sahifa")
+@router.message(F.text == "🏠 Asosiy menyu")  # eski matn (backward compat)
 async def to_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("🏠 Asosiy menyu", reply_markup=reply.main_menu())
+    await message.answer("🏡 Bosh sahifa", reply_markup=reply.main_menu())
 
 
 @router.message(Command("cancel"))
