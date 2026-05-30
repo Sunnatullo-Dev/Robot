@@ -19,6 +19,7 @@ class EditProfile(StatesGroup):
     location = State()
     bio = State()
     photo = State()
+    voice = State()
 
 
 class ReportFlow(StatesGroup):

@@ -38,6 +38,12 @@ async def _show_next(message: Message, state: FSMContext, user_id: int) -> None:
         caption=format_profile(candidate, distance_km=distance),
         reply_markup=reply.search_kb(),
     )
+    # Agar foydalanuvchining ovoz biografiyasi bo'lsa, uni ham yuborish
+    if candidate.get("voice_id"):
+        try:
+            await message.answer_voice(candidate["voice_id"], caption="🎤 Ovozli salomlashish")
+        except Exception:
+            pass
 
 
 @router.message(Command("search"))

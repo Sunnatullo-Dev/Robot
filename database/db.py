@@ -94,6 +94,13 @@ async def init_db(path: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS admins (
+                user_id    INTEGER PRIMARY KEY,
+                role       TEXT NOT NULL DEFAULT 'admin',
+                added_by   INTEGER,
+                added_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE INDEX IF NOT EXISTS idx_admin_logs_admin
                 ON admin_logs(admin_id, created_at DESC);
 
@@ -111,6 +118,8 @@ async def init_db(path: str) -> None:
             ("longitude", "ALTER TABLE users ADD COLUMN longitude REAL"),
             ("is_shadow_banned", "ALTER TABLE users ADD COLUMN is_shadow_banned INTEGER DEFAULT 0"),
             ("premium_until", "ALTER TABLE users ADD COLUMN premium_until TIMESTAMP"),
+            ("is_verified", "ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0"),
+            ("voice_id", "ALTER TABLE users ADD COLUMN voice_id TEXT"),
         ):
             if col not in existing_cols:
                 await db.execute(sql)

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Faqat yuqori darajadagi edit buyruqlari (region/city callbacklari emas)
 _EDIT_TOP_COMMANDS = {
     "edit:name", "edit:age", "edit:city", "edit:location",
-    "edit:bio", "edit:photo", "edit:delete",
+    "edit:bio", "edit:photo", "edit:voice", "edit:delete",
 }
 
 
@@ -40,6 +40,11 @@ async def _send_profile(message: Message, user_id: int) -> None:
         caption=f"<b>👤 Sizning anketangiz</b>\n\n{format_profile(user)}",
         reply_markup=inline.edit_profile_kb(),
     )
+    if user.get("voice_id"):
+        try:
+            await message.answer_voice(user["voice_id"], caption="🎤 Sizning ovozingiz")
+        except Exception:
+            pass
 
 
 @router.message(Command("profile"))
@@ -83,6 +88,18 @@ async def edit_callback(call: CallbackQuery, state: FSMContext) -> None:
             reply_markup=reply.location_kb(),
         )
         await state.set_state(EditProfile.location)
+        return
+
+    if field == "voice":
+        await call.message.answer(  # type: ignore[union-attr]
+            "🎤 <b>Ovozli xabar yuboring</b>\n\n"
+            "Telegramdagi mikrofon tugmasini bosib, o'zingiz haqingizda qisqacha "
+            "(5-30 sekund) ayting.\n"
+            "Bu sizning anketangizni jonliroq qiladi! 😊\n\n"
+            "Ovozni o'chirish uchun: <b>⏭ O'tkazib yuborish</b>",
+            reply_markup=reply.skip_kb(),
+        )
+        await state.set_state(EditProfile.voice)
         return
 
     prompts = {
@@ -188,6 +205,24 @@ async def edit_photo(message: Message, state: FSMContext) -> None:
     await models.update_field(message.from_user.id, "photo_id", message.photo[-1].file_id)
     await state.clear()
     await message.answer("✅ Rasm yangilandi.", reply_markup=reply.main_menu())
+
+
+@router.message(EditProfile.voice, F.voice)
+async def edit_voice(message: Message, state: FSMContext) -> None:
+    if message.from_user is None or message.voice is None:
+        return
+    await models.update_voice(message.from_user.id, message.voice.file_id)
+    await state.clear()
+    await message.answer("✅ Ovozli xabar saqlandi.", reply_markup=reply.main_menu())
+
+
+@router.message(EditProfile.voice, F.text == "⏭ O'tkazib yuborish")
+async def edit_voice_clear(message: Message, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+    await models.update_voice(message.from_user.id, None)
+    await state.clear()
+    await message.answer("✅ Ovozli xabar o'chirildi.", reply_markup=reply.main_menu())
 
 
 @router.message(EditProfile.location, F.location)

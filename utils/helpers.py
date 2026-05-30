@@ -46,8 +46,15 @@ def format_profile(user: dict[str, Any], distance_km: Optional[float] = None) ->
     bio = esc(user.get("bio"))
     g = user.get("gender") or ""
 
+    # Premium va verification belgilari
+    badges = ""
+    if user.get("is_verified"):
+        badges += " ✅"
+    if user.get("premium_until"):
+        badges += " 💎"
+
     text = (
-        f"{gender_emoji(g)} <b>{name}</b>, {age} yosh\n"
+        f"{gender_emoji(g)} <b>{name}</b>{badges}, {age} yosh\n"
         f"🏙 {city}"
     )
     if distance_km is not None:

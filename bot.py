@@ -10,6 +10,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, ErrorEvent, Message
 
 from config import load_config
+from database import models
 from database.db import init_db
 from handlers import (
     admin,
@@ -63,6 +64,7 @@ async def main() -> None:
 
     config = load_config()
     await init_db(config.db_path)
+    await models.ensure_owners(config.admin_ids)
 
     bot = Bot(
         token=config.bot_token,

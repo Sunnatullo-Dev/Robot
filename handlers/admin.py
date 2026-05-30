@@ -50,7 +50,23 @@ _BOT_START_TIME = time.monotonic()
 
 
 def _is_admin(user_id: int, config: Config) -> bool:
+    """env'dagi ADMIN_IDS yoki admins jadvalida bo'lsa, admin."""
+    # Sinxron variant — env yetadi. DB tekshiruvi uchun _is_admin_async ishlatiladi.
     return user_id in config.admin_ids
+
+
+async def _is_admin_async(user_id: int, config: Config) -> bool:
+    if user_id in config.admin_ids:
+        return True
+    role = await models.get_admin_role(user_id)
+    return role is not None
+
+
+async def _is_owner(user_id: int, config: Config) -> bool:
+    if user_id in config.admin_ids:
+        return True
+    role = await models.get_admin_role(user_id)
+    return role == "owner"
 
 
 def _fmt_time(ts: str | None) -> str:
@@ -865,3 +881,194 @@ async def cmd_unseed(message: Message, config: Config) -> None:
         f"🗑 {deleted} ta test anketa o'chirildi.",
         reply_markup=reply.main_menu(),
     )
+
+
+# ============ 💎 PREMIUM BOSHQARUV ============
+
+@router.message(Command("setpremium"))
+async def cmd_setpremium(message: Message, bot: Bot, config: Config) -> None:
+    """/setpremium <user_id> <days>  — kunlar soni 0 bo'lsa, premium olinadi."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 3 or not parts[1].isdigit() or not parts[2].lstrip("-").isdigit():
+        await message.answer(
+            "📋 <b>Foydalanish:</b>\n"
+            "<code>/setpremium &lt;user_id&gt; &lt;kunlar&gt;</code>\n\n"
+            "Masalan:\n"
+            "<code>/setpremium 123456789 30</code> — 30 kun premium\n"
+            "<code>/setpremium 123456789 0</code> — premiumni olib tashlash"
+        )
+        return
+
+    target_id = int(parts[1])
+    days = int(parts[2])
+    if not await models.get_user(target_id):
+        await message.answer(f"❌ Foydalanuvchi #{target_id} topilmadi.")
+        return
+
+    await models.set_premium(target_id, days)
+    await models.log_admin_action(
+        message.from_user.id, "set_premium", target_id, details=f"days={days}"
+    )
+
+    if days <= 0:
+        await message.answer(f"✅ #{target_id} dan premium olib tashlandi.")
+        try:
+            await bot.send_message(target_id, "ℹ️ Premium statusingiz tugadi.")
+        except (TelegramForbiddenError, TelegramBadRequest):
+            pass
+    else:
+        await message.answer(f"💎 #{target_id} ga <b>{days} kunga</b> premium berildi.")
+        try:
+            await bot.send_message(
+                target_id,
+                f"🎉 <b>Tabriklaymiz!</b>\n\n"
+                f"Sizga <b>{days} kunga</b> 💎 Premium status berildi.\n\n"
+                f"Premium afzalliklar:\n"
+                f"• Anketa va xabarda 💎 belgisi\n"
+                f"• Maxsus broadcast'larni olish",
+            )
+        except (TelegramForbiddenError, TelegramBadRequest):
+            pass
+
+
+@router.message(Command("verify"))
+async def cmd_verify(message: Message, bot: Bot, config: Config) -> None:
+    """/verify <user_id> [0|1]  — foydalanuvchini tasdiqlash."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(
+            "📋 <b>Foydalanish:</b>\n"
+            "<code>/verify &lt;user_id&gt;</code> — tasdiqlash (✅)\n"
+            "<code>/verify &lt;user_id&gt; 0</code> — tasdiqni olib tashlash"
+        )
+        return
+
+    target_id = int(parts[1])
+    verified = True if len(parts) < 3 else parts[2] == "1"
+
+    if not await models.get_user(target_id):
+        await message.answer(f"❌ Foydalanuvchi #{target_id} topilmadi.")
+        return
+
+    await models.set_verified(target_id, verified)
+    await models.log_admin_action(
+        message.from_user.id, "verify", target_id, details=str(int(verified))
+    )
+
+    if verified:
+        await message.answer(f"✅ #{target_id} tasdiqlandi.")
+        try:
+            await bot.send_message(
+                target_id,
+                "🎉 <b>Anketangiz tasdiqlandi!</b>\n\n"
+                "Endi anketangizda ✅ belgisi paydo bo'ladi — bu boshqalarga "
+                "sizning haqiqiy ekanligingizdan dalolat beradi.",
+            )
+        except (TelegramForbiddenError, TelegramBadRequest):
+            pass
+    else:
+        await message.answer(f"❌ #{target_id} tasdiq olib tashlandi.")
+
+
+# ============ 👑 ROLE TIZIMI ============
+
+ROLE_LABELS = {
+    "owner": "👑 Owner",
+    "super_admin": "⭐ Super Admin",
+    "admin": "🛡 Admin",
+    "moderator": "🔧 Moderator",
+    "support": "💬 Support",
+}
+
+
+@router.message(Command("addadmin"))
+async def cmd_addadmin(message: Message, config: Config) -> None:
+    """/addadmin <user_id> [role]  — yangi admin qo'shish (faqat owner)."""
+    if message.from_user is None or not await _is_owner(message.from_user.id, config):
+        if message.from_user is not None and await _is_admin_async(message.from_user.id, config):
+            await message.answer("⛔ Bu amal faqat owner uchun.")
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].lstrip("-").isdigit():
+        await message.answer(
+            "📋 <b>Foydalanish:</b>\n"
+            "<code>/addadmin &lt;user_id&gt; [role]</code>\n\n"
+            "Rollar: <code>super_admin</code>, <code>admin</code>, "
+            "<code>moderator</code>, <code>support</code>\n\n"
+            "Masalan:\n"
+            "<code>/addadmin 123456789 moderator</code>"
+        )
+        return
+
+    target_id = int(parts[1])
+    role = parts[2] if len(parts) >= 3 else "admin"
+    if role not in models.VALID_ROLES or role == "owner":
+        await message.answer(f"❌ Noto'g'ri role: <code>{esc(role)}</code>\nMavjud rollar: super_admin, admin, moderator, support")
+        return
+
+    await models.add_admin_role(target_id, role, message.from_user.id)
+    await models.log_admin_action(
+        message.from_user.id, "add_admin", target_id, details=role
+    )
+    await message.answer(
+        f"✅ #{target_id} {ROLE_LABELS.get(role, role)} sifatida qo'shildi."
+    )
+
+
+@router.message(Command("removeadmin"))
+async def cmd_removeadmin(message: Message, config: Config) -> None:
+    """/removeadmin <user_id>  — admin'ni olib tashlash (faqat owner)."""
+    if message.from_user is None or not await _is_owner(message.from_user.id, config):
+        if message.from_user is not None and await _is_admin_async(message.from_user.id, config):
+            await message.answer("⛔ Bu amal faqat owner uchun.")
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].lstrip("-").isdigit():
+        await message.answer("📋 <code>/removeadmin &lt;user_id&gt;</code>")
+        return
+
+    target_id = int(parts[1])
+    await models.remove_admin_role(target_id)
+    await models.log_admin_action(message.from_user.id, "remove_admin", target_id)
+    await message.answer(f"✅ #{target_id} adminlikdan olib tashlandi.")
+
+
+@router.message(Command("admins"))
+async def cmd_listadmins(message: Message, config: Config) -> None:
+    """Adminlar ro'yxati (har qanday admin ko'ra oladi)."""
+    if message.from_user is None or not await _is_admin_async(message.from_user.id, config):
+        return
+    admins = await models.list_admins()
+    if not admins:
+        await message.answer("📭 Ro'yxatga olingan admin yo'q.")
+        return
+    lines = [f"<b>👥 Adminlar ({len(admins)})</b>\n"]
+    for a in admins:
+        uname = f"@{esc(a['username'])}" if a.get("username") else ""
+        name = esc(a.get("name")) or "—"
+        role = ROLE_LABELS.get(a["role"], a["role"])
+        lines.append(f"{role} | <code>{a['user_id']}</code> | {name} {uname}")
+    await message.answer("\n".join(lines))
+
+
+@router.message(Command("premiums"))
+async def cmd_premiums(message: Message, config: Config) -> None:
+    """Premium foydalanuvchilar ro'yxati."""
+    if message.from_user is None or not _is_admin(message.from_user.id, config):
+        return
+    users = await models.get_premium_users()
+    if not users:
+        await message.answer("📭 Premium foydalanuvchi yo'q.")
+        return
+    lines = [f"<b>💎 Premium foydalanuvchilar ({len(users)})</b>\n"]
+    for u in users[:30]:
+        uname = f"@{esc(u['username'])}" if u.get("username") else "—"
+        until = (u.get("premium_until") or "")[:10]
+        lines.append(f"• <code>{u['user_id']}</code> {esc(u.get('name')) or '—'} {uname} — {until} gacha")
+    await message.answer("\n".join(lines))

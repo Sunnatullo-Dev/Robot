@@ -119,6 +119,15 @@ async def delete_seed_users(base_id: int) -> int:
         return cur.rowcount or 0
 
 
+async def update_voice(user_id: int, voice_id: Optional[str]) -> None:
+    async with _conn() as db:
+        await db.execute(
+            "UPDATE users SET voice_id = ? WHERE user_id = ?",
+            (voice_id, user_id),
+        )
+        await db.commit()
+
+
 async def update_location(user_id: int, lat: Optional[float], lon: Optional[float]) -> None:
     async with _conn() as db:
         await db.execute(
@@ -165,6 +174,131 @@ async def set_shadow_banned(user_id: int, shadow: bool) -> None:
             (1 if shadow else 0, user_id),
         )
         await db.commit()
+
+
+# ============ PREMIUM ============
+
+async def set_premium(user_id: int, days: int) -> None:
+    """days=0 → premium olib tashlanadi; >0 → shu kungacha premium beriladi."""
+    async with _conn() as db:
+        if days <= 0:
+            await db.execute(
+                "UPDATE users SET premium_until = NULL WHERE user_id = ?",
+                (user_id,),
+            )
+        else:
+            await db.execute(
+                "UPDATE users SET premium_until = datetime('now', ?) "
+                "WHERE user_id = ?",
+                (f"+{days} days", user_id),
+            )
+        await db.commit()
+
+
+async def is_premium(user_id: int) -> bool:
+    async with _conn() as db:
+        async with db.execute(
+            "SELECT premium_until FROM users "
+            "WHERE user_id = ? AND premium_until > CURRENT_TIMESTAMP",
+            (user_id,),
+        ) as cur:
+            return await cur.fetchone() is not None
+
+
+# ============ ROLE TIZIMI ============
+
+VALID_ROLES = ("owner", "super_admin", "admin", "moderator", "support")
+
+
+async def ensure_owners(owner_ids: list[int]) -> None:
+    """`.env`'dagi ADMIN_IDS'larni 'owner' rolida ro'yxatga oladi (bir marta)."""
+    if not owner_ids:
+        return
+    async with _conn() as db:
+        for uid in owner_ids:
+            await db.execute(
+                """
+                INSERT INTO admins (user_id, role, added_by) VALUES (?, 'owner', ?)
+                ON CONFLICT(user_id) DO UPDATE SET role = 'owner'
+                """,
+                (uid, uid),
+            )
+        await db.commit()
+
+
+async def add_admin_role(user_id: int, role: str, added_by: int) -> None:
+    if role not in VALID_ROLES:
+        raise ValueError(f"Noma'lum role: {role}")
+    async with _conn() as db:
+        await db.execute(
+            """
+            INSERT INTO admins (user_id, role, added_by) VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET role = excluded.role
+            """,
+            (user_id, role, added_by),
+        )
+        await db.commit()
+
+
+async def remove_admin_role(user_id: int) -> None:
+    async with _conn() as db:
+        await db.execute("DELETE FROM admins WHERE user_id = ? AND role != 'owner'", (user_id,))
+        await db.commit()
+
+
+async def get_admin_role(user_id: int) -> Optional[str]:
+    async with _conn() as db:
+        async with db.execute("SELECT role FROM admins WHERE user_id = ?", (user_id,)) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+
+async def list_admins() -> list[dict[str, Any]]:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT a.user_id, a.role, a.added_at, u.name, u.username
+            FROM admins a
+            LEFT JOIN users u ON u.user_id = a.user_id
+            ORDER BY
+                CASE a.role
+                    WHEN 'owner' THEN 1
+                    WHEN 'super_admin' THEN 2
+                    WHEN 'admin' THEN 3
+                    WHEN 'moderator' THEN 4
+                    WHEN 'support' THEN 5
+                END
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def set_verified(user_id: int, verified: bool) -> None:
+    async with _conn() as db:
+        await db.execute(
+            "UPDATE users SET is_verified = ? WHERE user_id = ?",
+            (1 if verified else 0, user_id),
+        )
+        await db.commit()
+
+
+async def get_premium_users(limit: int = 50) -> list[dict[str, Any]]:
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT user_id, name, username, premium_until
+            FROM users
+            WHERE premium_until IS NOT NULL AND premium_until > CURRENT_TIMESTAMP
+            ORDER BY premium_until DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
 
 async def hard_delete_user(user_id: int) -> None:
